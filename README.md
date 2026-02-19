@@ -1,4 +1,4 @@
-# Bacterial Colony Detection with Protein Structure-Based Antibiotic Insight
+# AI-Oriented Bacterial Colony Detection & Protein Structure-Based Antibiotic Insight
 
 
 ##  Project Overview
