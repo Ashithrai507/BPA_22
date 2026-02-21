@@ -24,7 +24,32 @@ Output: Identified bacterial species
 
 ---
 
-##  Steps
+### Advanced Bacteria Detection Pipeline
+<details>
+
+- Overview Architecture
+```md
+Microscopic Petri Dish Image
+            ↓
+        YOLO Model
+ (Detect & draw bounding boxes)
+            ↓
+    Crop individual colonies
+            ↓
+      CNN Classifier
+ (Classify bacteria type)
+            ↓
+ Final Output:
+ - Colony count
+ - Location
+ - Bacteria type
+```
+
+</details>
+
+- Steps
+
+<details>
 
 ### 1️ Dataset Collection
 Collect labeled microscopic images of:
@@ -62,6 +87,7 @@ Confidence: 96.4%
 Colony count: 128
 Average colony size: 0.82 mm
 ```
+</details>
 
 ---
 
@@ -72,6 +98,8 @@ Input: Identified bacterial species
 Output: 3D structure of essential protein target
 
 ---
+
+<details>
 
 ##  Step 1: Fetch Essential Protein
 
@@ -127,9 +155,13 @@ From the 3D structure, compute:
 
 These structural features will be used for antibiotic recommendation.
 
+</details>
+
 ---
 
 #  PART 3: Antibiotic Recommendation
+
+<details>
 
 ##  Objective
 Input:
@@ -199,6 +231,8 @@ Antibiotic Recommendation Model
 ↓
 Final Insight Report
 ```
+
+</details>
 
 ---
 
