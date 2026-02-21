@@ -47,7 +47,7 @@ Microscopic Petri Dish Image
 
 </details>
 
-- Steps
+## Steps
 
 <details>
 
