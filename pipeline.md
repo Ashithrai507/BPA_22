@@ -12,22 +12,21 @@
 
 ### Estimated pipeline
 ```md
-Microscope Image
-        ↓
-AI detects Escherichia coli
-        ↓
-Fetch essential protein sequences
-        ↓
-Predict 3D structure (AlphaFold)
-        ↓
-Analyze active site
-        ↓
-Dock antibiotic
-        ↓
-Predict inhibition potential
-        ↓
-Generate antibiotic insight report
-
+Image
+   ↓
+CNN Model
+   ↓
+Detected Bacteria
+   ↓
+Fetch Essential Protein
+   ↓
+AlphaFold Structure
+   ↓
+Extract Structural Features
+   ↓
+Antibiotic Recommendation Model
+   ↓
+Final Report
 ```
 
 ### Aim
@@ -51,3 +50,24 @@ Structural Biology
 
 Possibly Molecular Simulation
 ```
+
+## Phase 1
+- final pipeline
+```md
+Microscopic Petri Dish Image
+            ↓
+        YOLO Model
+ (Detect & draw bounding boxes)
+            ↓
+    Crop individual colonies
+            ↓
+      CNN Classifier
+ (Classify bacteria type)
+            ↓
+ Final Output:
+ - Colony count
+ - Location
+ - Bacteria type
+```
+
+##
