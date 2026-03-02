@@ -1,6 +1,16 @@
 # AI-Oriented Bacterial Colony Detection & Protein Structure-Based Antibiotic Insight
 
 
+> ## what are we actually targeting
+> To build a Fast, AI assisted identification of bacterial infection and intelligent antibiotic decision support for laboratories.
+
+ In simple words:
+```md
+- Detect bacteria
+- Identify its critical proteins
+- Suggest effective antibiotics  
+```
+
 ##  Project Overview
 
 This project proposes an interdisciplinary AI pipeline that integrates:
