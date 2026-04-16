@@ -13,9 +13,7 @@ This project proposes an interdisciplinary AI pipeline that integrates:
 The goal is to build an AI-assisted system that detects bacteria from microscopic images, analyzes essential protein structures, and provides antibiotic target insight based on structural characteristics.
 
 >  This system provides computational insights and does NOT replace laboratory testing or medical prescription.
-
 ---
-
 #  PART 1: Bacteria Detection
 
 ##  Objective
@@ -316,5 +314,5 @@ It transforms:
 Image → Biology → Structure → Drug Insight
 
 Making it a powerful interdisciplinary AI system.
-
+Hii 
 
