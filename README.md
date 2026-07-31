@@ -1,20 +1,115 @@
-# Bacteria Lab Assistant Predictor
+# BPA-22 — Bacteria Lab Assistant Predictor
 
-This project trains and runs a bacteria + fungi image analysis pipeline for lab assistance.
+A classical machine-learning pipeline that analyzes microscopy images of bacterial and
+fungal cultures and produces structured lab-grade predictions: **organism type,
+taxonomy group, species, gram stain**, and **colony morphology** — via a hierarchical
+`scikit-learn` classifier stack with a desktop GUI.
 
-It performs:
-- Organism type prediction (`bacteria` vs `fungi`)
-- Gram-type prediction (internal classifier: gram-positive vs gram-negative, with fungi mapped to `fungi`)
-- Species prediction (constrained by taxonomy group)
-- Colony detection and measurement from input image
-- Morphology prediction focused on `cocci`, `bacilli`, `spiral`, with fungal override
-- Exact JSON output contracts in **basic** and **advanced** mode
+```
+Input image ──► global features ──► organism_type ──► taxonomy_group ──► species ──► gram
+                                 └──────────► colony segmentation ──► shape ──► aggregation ──► JSON
+```
 
-> Dataset root expected: `Bacteria dataset/`
+---
 
-## Output contracts
+## Features
 
-### Basic output
+- **Hierarchical ML inference** — each classifier narrows the decision space, reducing
+  biologically invalid predictions.
+- **Organism classification** — `bacteria` vs `fungi` across **10 supported species**.
+- **Gram classification** — `gram_positive` / `gram_negative` (bacteria only; fungi
+  mapped to `non_bacterial_fungi`).
+- **Group-constrained species prediction** — species models are trained per taxonomy
+  group; the global model is a fallback.
+- **Colony detection & measurement** — area, perimeter, circularity, aspect ratio,
+  solidity, equivalent diameter, mean intensity.
+- **Morphology prediction** — `cocci`, `bacilli`, `spiral` (geometry heuristic),
+  `fungal` (override).
+- **Structured JSON output** — exact contracts in **basic** and **advanced** mode.
+- **Confidence gating** — low-quality or out-of-distribution images are flagged as
+  `unknown` instead of returning a false positive.
+- **Desktop GUI** — retro Win95-styled PyQt5 application with live image preview and
+  raw JSON inspection.
+
+---
+
+## Supported Taxonomy
+
+| Taxonomy group       | Organisms                                                          |
+| -------------------- | ------------------------------------------------------------------ |
+| Gram-positive cocci  | *Staphylococcus aureus*, *Streptococcus pyogenes*, *Enterococcus faecalis* |
+| Gram-positive bacilli| *Bacillus subtilis*, *Clostridium sporogenes*                      |
+| Gram-negative bacilli| *Escherichia coli*, *Klebsiella pneumoniae*, *Pseudomonas aeruginosa* |
+| Fungi                | *Candida albicans*, *Aspergillus niger*                            |
+
+---
+
+## Installation
+
+Requires **Python 3.11+**.
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Core dependencies: `numpy`, `pandas`, `scikit-learn`, `opencv-python-headless`,
+`joblib`, `PyQt5`, `pytest`.
+
+---
+
+## Usage
+
+### 1. Train the model bundle
+
+```bash
+python train_model.py
+```
+
+Artifacts written to:
+
+- `artifacts/bacteria_models.joblib` — serialized model bundle
+- `artifacts/bacteria_models.metrics.json` — per-model evaluation metrics
+
+> The bundled artifact was produced in a different workspace. Retrain locally to
+> refresh feature paths and metrics.
+
+### 2. Run prediction from the CLI
+
+```bash
+# Basic output
+python predict_bacteria.py \
+  --image "Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" \
+  --mode basic
+
+# Advanced output (per-colony measurements + morphology summary)
+python predict_bacteria.py \
+  --image "Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" \
+  --mode advanced
+```
+
+### 3. Launch the desktop UI
+
+```bash
+python bacteria_ui.py
+```
+
+- Open an image (PNG / JPG / BMP / TIFF / WEBP)
+- Click **Analyze** to run prediction
+- Toggle **Show Details** to view the full JSON payload
+
+### 4. Run the test suite
+
+```bash
+python -m pytest -q
+```
+
+Validates the basic/advanced JSON output contracts.
+
+---
+
+## Output Contracts
+
+### Basic mode
 
 ```json
 {
@@ -27,7 +122,7 @@ It performs:
 }
 ```
 
-### Advanced output
+### Advanced mode
 
 ```json
 {
@@ -56,61 +151,97 @@ It performs:
 }
 ```
 
-## Notes about spiral + fungi
+`distribution` values: `clustered`, `mixed`, `dispersed`, `isolated`.
 
-The provided dataset contains bacteria mainly mapped to cocci/bacilli classes.
-Spiral class is produced via morphology heuristics (`aspect_ratio` and `circularity`) when contours match spiral-like geometry.
-Fungal samples override the dominant shape to `fungal` for clarity.
+### Uncertain / rejected input
 
-## Installation
+When the image is unreadable, contains no valid colonies, or fails confidence/quality
+gates, all label fields are returned as `unknown` (colony counts are still reported).
 
-```bash
-python -m pip install -r requirements.txt
+---
+
+## How It Works
+
+### Feature extraction
+
+- **Global image features (616-dim)** — per image: RGB/HSV/grayscale mean & std,
+  Laplacian variance (sharpness), Canny edge density, 8-bin RGB color histograms, and a
+  24×24 spatial grayscale signature encoding colony layout.
+- **Colony features (7-dim)** — per segmented colony: area, perimeter, circularity
+  (`4πA/P²`), aspect ratio, solidity, equivalent diameter, mean intensity.
+
+### Hierarchical model stack
+
+| Model              | Task                                                        |
+| ------------------ | ----------------------------------------------------------- |
+| `organism_type_model` | bacteria vs fungi                                         |
+| `group_model`      | taxonomy group (4 classes)                                  |
+| `organism_model`   | global species classifier (10 classes, fallback)            |
+| `group_species_models` | per-group specialist species classifiers                |
+| `gram_model`       | gram_positive vs gram_negative (bacteria rows only)         |
+| `shape_model`      | colony morphology: cocci / bacilli / fungal                 |
+
+Every classifier is auto-selected between **RandomForest**, **ExtraTrees**, and
+**KNN + StandardScaler** based on hold-out validation accuracy.
+
+### Inference flow
+
+1. Extract global features from the image.
+2. Predict organism type → taxonomy group → group-constrained species.
+3. Predict gram label; apply **metadata consistency overrides** so the output can never
+   contradict the species' known biology.
+4. Segment colonies; predict a shape per colony (with a spiral geometry heuristic).
+5. Aggregate to dominant shape + spatial distribution + blended confidence.
+6. Gate the result through the confidence/quality checks; build the JSON output.
+
+---
+
+## Project Structure
+
+```
+BPA_22/
+├── bacteria_ui.py                 # PyQt5 desktop UI
+├── train_model.py                 # CLI: train + save artifacts
+├── predict_bacteria.py            # CLI: predict on a single image
+├── src/
+│   └── bacteria_assistant/
+│       ├── config.py              # taxonomy, thresholds, paths
+│       ├── features.py            # image + colony feature extraction
+│       ├── training.py            # hierarchical training pipeline
+│       └── inference.py           # prediction + output assembly
+├── morphology/                    # standalone prototype pipeline (research)
+├── tests/
+│   └── test_output_contract.py    # JSON output contract tests
+├── documentation/                 # architecture & workflow deep-dives
+└── artifacts/                     # trained model bundle + metrics
 ```
 
-## Train model
+---
 
-```bash
-python train_model.py
-```
+## Documentation
 
-Trained artifact is saved to:
-- `artifacts/bacteria_models.joblib`
-- `artifacts/bacteria_models.metrics.json`
+- [`documentation/classical_ml_workflow.md`](documentation/classical_ml_workflow.md) —
+  complete end-to-end walkthrough of the ML pipeline.
+- [`documentation/pipeline_architecture.md`](documentation/pipeline_architecture.md) —
+  detailed system architecture.
+- [`documentation/follow.md`](documentation/follow.md) — feature/spec notes.
 
-## Run prediction
+---
 
-### Basic mode
+## Known Limitations
 
-```bash
-python predict_bacteria.py --image "Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" --mode basic
-```
+- **Moderate accuracy on hard splits** — e.g. species-level accuracy is limited by
+  small per-class sample sizes and strong visual similarity between species.
+- **Spiral is heuristic-only** — no spiral training samples exist; the class is inferred
+  from geometry (`aspect_ratio ≥ 3.0`, `circularity ≤ 0.35`).
+- **Two imaging modalities** — gram-stain and media-plate images differ visually; the
+  models must generalize across both.
+- **Rejection thresholds** are conservative; some real but noisy images may be flagged
+  as `unknown`.
 
-### Advanced mode
+## Future Improvements
 
-```bash
-python predict_bacteria.py --image "Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" --mode advanced
-```
-
-## Run simple PyQt5 UI
-
-```bash
-python bacteria_ui.py
-```
-
-UI features:
-- Upload an image from dataset or your test folder
-- Predict bacteria name + bacteria type + dominant morphology
-- View JSON output directly in the app
-
-## Run tests
-
-```bash
-python -m pytest -q
-```
-
-## Troubleshooting
-
-- If prediction fails with missing model file, run training first.
-- If images are not found, verify `dataset_full.csv` paths remain under `Bacteria dataset/`.
-- For better accuracy, add more labeled spiral samples and retrain.
+- CNN / transfer-learning feature extractor for stronger discrimination.
+- Larger, balanced dataset with explicit spiral samples.
+- Confidence-threshold calibration and an explicit `uncertain` tier.
+- Model monitoring / drift dashboard.
