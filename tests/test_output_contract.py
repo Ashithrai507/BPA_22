@@ -36,12 +36,12 @@ def test_basic_output_contract() -> None:
         "confidence",
     }
     assert required_keys.issubset(set(output.keys()))
-    assert output["organism_type"] in {"bacteria", "fungi"}
+    assert output["organism_type"] in {"bacteria", "fungi", "unknown"}
     assert isinstance(output["predicted_bacteria_name"], str)
     assert output["predicted_bacteria_name"]
-    assert output["bacteria_type"] in {"gram_positive", "gram_negative", "non_bacterial_fungi"}
+    assert output["bacteria_type"] in {"gram_positive", "gram_negative", "non_bacterial_fungi", "unknown"}
     assert isinstance(output["total_colonies_detected"], int)
-    assert output["dominant_shape"] in {"cocci", "bacilli", "spiral", "fungal"}
+    assert output["dominant_shape"] in {"cocci", "bacilli", "spiral", "fungal", "unknown"}
     assert 0.0 <= output["confidence"] <= 1.0
 
 
@@ -61,14 +61,14 @@ def test_advanced_output_contract() -> None:
         "final_morphology",
     }
     assert required_keys.issubset(set(output.keys()))
-    assert output["organism_type"] in {"bacteria", "fungi"}
+    assert output["organism_type"] in {"bacteria", "fungi", "unknown"}
     assert isinstance(output["predicted_bacteria_name"], str)
     assert output["predicted_bacteria_name"]
-    assert output["bacteria_type"] in {"gram_positive", "gram_negative", "non_bacterial_fungi"}
+    assert output["bacteria_type"] in {"gram_positive", "gram_negative", "non_bacterial_fungi", "unknown"}
     assert isinstance(output["total_colonies"], int)
 
     final_morphology = output["final_morphology"]
     assert set(final_morphology.keys()) == {"dominant_shape", "distribution", "confidence"}
-    assert final_morphology["dominant_shape"] in {"cocci", "bacilli", "spiral", "fungal"}
+    assert final_morphology["dominant_shape"] in {"cocci", "bacilli", "spiral", "fungal", "unknown"}
     assert isinstance(final_morphology["distribution"], str)
     assert 0.0 <= final_morphology["confidence"] <= 1.0

@@ -71,6 +71,16 @@ ORGANISM_METADATA = {
 
 SUPPORTED_SHAPES = ("cocci", "bacilli", "spiral", "fungal")
 
+UNKNOWN_LABEL = "unknown"
+
+# Rejection thresholds to flag out-of-distribution images.
+MIN_ORGANISM_CONFIDENCE = 0.55
+MIN_COLONY_CONFIDENCE = 0.45
+MIN_COLONIES_FOR_VALID = 1
+MIN_ORGANISM_TYPE_PROB = 0.6
+MIN_EDGE_DENSITY = 0.015
+MIN_LAPLACIAN_VAR = 25.0
+
 ORGANISMS_BY_GROUP = {
     "gram_positive_cocci": [
         "Staphylococcus aureus",

@@ -8,7 +8,18 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from .config import MODEL_PATH, ORGANISM_METADATA, ORGANISMS_BY_GROUP
+from .config import (
+    MODEL_PATH,
+    MIN_COLONIES_FOR_VALID,
+    MIN_COLONY_CONFIDENCE,
+    MIN_EDGE_DENSITY,
+    MIN_LAPLACIAN_VAR,
+    MIN_ORGANISM_CONFIDENCE,
+    MIN_ORGANISM_TYPE_PROB,
+    ORGANISM_METADATA,
+    ORGANISMS_BY_GROUP,
+    UNKNOWN_LABEL,
+)
 from .features import (
     colony_measurement_to_json,
     colony_to_feature_dict,
@@ -45,6 +56,26 @@ def _dominant_shape_and_confidence(shape_predictions: list[str], probs: list[flo
     confidence = float((0.65 * dominance_ratio) + (0.35 * mean_prob))
     confidence = max(0.0, min(1.0, confidence))
     return dominant_shape, confidence
+
+
+def _should_reject_image(
+    organism_type_prob: float,
+    organism_confidence: float,
+    shape_confidence: float,
+    colony_count: int,
+    edge_density: float,
+    laplacian_var: float,
+) -> bool:
+    if colony_count < MIN_COLONIES_FOR_VALID:
+        return True
+
+    low_model_confidence = (organism_confidence < MIN_ORGANISM_CONFIDENCE) and (
+        shape_confidence < MIN_COLONY_CONFIDENCE
+    )
+    low_organism_type = organism_type_prob < MIN_ORGANISM_TYPE_PROB
+    low_image_quality = (edge_density < MIN_EDGE_DENSITY) and (laplacian_var < MIN_LAPLACIAN_VAR)
+
+    return low_organism_type or low_model_confidence or low_image_quality
 
 
 def _predict_species_with_group_constraint(
@@ -101,6 +132,9 @@ def predict_bacteria_image(
         )
 
     predicted_organism_type = str(organism_type_model.predict(image_vector)[0])
+    organism_type_prob = 0.5
+    if hasattr(organism_type_model, "predict_proba"):
+        organism_type_prob = float(np.max(organism_type_model.predict_proba(image_vector)[0]))
 
     group_model = artifacts.get("group_model")
     if group_model is None:
@@ -158,6 +192,38 @@ def predict_bacteria_image(
     if predicted_organism_type == "fungi":
         dominant_shape = "fungal"
     final_confidence = max(confidence, organism_confidence)
+
+    if _should_reject_image(
+        organism_type_prob,
+        organism_confidence,
+        confidence,
+        len(colony_json_rows),
+        float(image_features.get("edge_density", 0.0)),
+        float(image_features.get("laplacian_var", 0.0)),
+    ):
+        unknown_response = {
+            "organism_type": UNKNOWN_LABEL,
+            "predicted_bacteria_name": UNKNOWN_LABEL,
+            "bacteria_type": UNKNOWN_LABEL,
+            "total_colonies_detected": len(colony_json_rows),
+            "dominant_shape": UNKNOWN_LABEL,
+            "confidence": round(final_confidence, 2),
+        }
+        if mode == "basic":
+            return unknown_response
+
+        return {
+            "organism_type": UNKNOWN_LABEL,
+            "predicted_bacteria_name": UNKNOWN_LABEL,
+            "bacteria_type": UNKNOWN_LABEL,
+            "total_colonies": len(colony_json_rows),
+            "colonies": colony_json_rows,
+            "final_morphology": {
+                "dominant_shape": UNKNOWN_LABEL,
+                "distribution": UNKNOWN_LABEL,
+                "confidence": round(final_confidence, 2),
+            },
+        }
 
     if mode == "basic":
         return {
