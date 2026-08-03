@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+
+def _env_path(name: str, default: str) -> Path:
+    """Resolve a configurable path from the environment, falling back to default."""
+    return Path(os.environ.get(name, default)).expanduser()
+
 
 ORGANISM_METADATA = {
     # Gram-positive cocci
@@ -102,8 +109,10 @@ ORGANISMS_BY_GROUP = {
     ],
 }
 
-ARTIFACT_DIR = Path("artifacts")
-MODEL_PATH = ARTIFACT_DIR / "bacteria_models.joblib"
+DATASET_ROOT = _env_path("BACTERIA_DATASET_ROOT", "Bacteria dataset")
+ARTIFACT_DIR = _env_path("BACTERIA_ARTIFACT_DIR", "artifacts")
+MODEL_PATH = _env_path("BACTERIA_MODEL_PATH", str(ARTIFACT_DIR / "bacteria_models.joblib"))
+
 
 def normalize_organism_name(name: str) -> str:
     return " ".join(str(name).replace("_", " ").split()).strip()

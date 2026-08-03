@@ -1,14 +1,15 @@
 import os
 import sys
+
 import cv2
 
 # FIX IMPORT PATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from src.config import MAX_AREA, MIN_AREA
+from src.extraction.extract import extract_colonies
 from src.preprocessing.preprocess import preprocess_image
 from src.segmentation.segment import segment_image
-from src.extraction.extract import extract_colonies
-from src.config import MIN_AREA, MAX_AREA
 
 INPUT_DIR = "data/raw/petri_dish/"
 COLONY_BASE_DIR = "data/colonies/"
@@ -23,8 +24,7 @@ print("\n🚀 Starting Pipeline...\n")
 total_images = 0
 total_colonies = 0
 
-for root, dirs, files in os.walk(INPUT_DIR):
-
+for root, _dirs, files in os.walk(INPUT_DIR):
     for filename in files:
         if not filename.lower().endswith(VALID_EXTENSIONS):
             continue
@@ -47,15 +47,13 @@ for root, dirs, files in os.walk(INPUT_DIR):
         # -------------------------
         gray, blur = preprocess_image(img)
         mask = segment_image(blur)
-        contours, colonies = extract_colonies(
-            img, mask, MIN_AREA, MAX_AREA
-        )
+        contours, colonies = extract_colonies(img, mask, MIN_AREA, MAX_AREA)
 
         # -------------------------
         # DEBUG IMAGE
         # -------------------------
         debug_img = img.copy()
-        cv2.drawContours(debug_img, contours, -1, (0,255,0), 2)
+        cv2.drawContours(debug_img, contours, -1, (0, 255, 0), 2)
 
         debug_name = f"{label}_{filename}"
         cv2.imwrite(os.path.join(DEBUG_DIR, debug_name), debug_img)

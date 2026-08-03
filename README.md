@@ -103,7 +103,34 @@ python bacteria_ui.py
 python -m pytest -q
 ```
 
-Validates the basic/advanced JSON output contracts.
+Validates the basic/advanced JSON output contracts. Tests skip (with a visible
+reason) if the dataset or trained model is missing — they never pass vacuously.
+
+---
+
+## Development
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contributor workflow.
+
+```bash
+make setup        # venv + runtime + dev deps
+make train        # rebuild the model bundle (needs Bacteria dataset/ present)
+make test         # run tests
+make lint         # ruff check + format check
+make format       # auto-format with ruff
+make run-ui       # launch the desktop UI
+make help         # list all targets
+```
+
+**Dataset & artifact are not in git.** Copy `Bacteria dataset/` (~302 MB) into the
+repo root and run `make train`, or copy an existing `artifacts/bacteria_models.joblib`
+(~662 MB). Per-developer paths can be overridden via `.env` (see `.env.example`).
+
+CI (GitHub Actions) runs lint + full tests on every PR. Because CI has no dataset,
+it uses a seeded model artifact (Actions cache, falling back to the `model-artifact`
+GitHub release). After retraining, reseed with `make ci-upload-artifact`.
+
+`main` is protected: pull requests require an approving review and green CI.
 
 ---
 
@@ -203,6 +230,16 @@ BPA_22/
 ├── bacteria_ui.py                 # PyQt5 desktop UI
 ├── train_model.py                 # CLI: train + save artifacts
 ├── predict_bacteria.py            # CLI: predict on a single image
+├── Makefile                       # dev workflow targets (setup/train/test/lint/...)
+├── pyproject.toml                 # packaging, pytest, ruff config
+├── requirements.txt               # pinned runtime dependencies
+├── .env.example                   # optional per-dev path overrides
+├── CONTRIBUTING.md                # contributor workflow
+├── .pre-commit-config.yaml        # optional git hooks
+├── .github/
+│   ├── workflows/ci.yml           # lint + tests on every PR
+│   └── PULL_REQUEST_TEMPLATE.md
+├── .devcontainer/                 # optional Docker dev container
 ├── src/
 │   └── bacteria_assistant/
 │       ├── config.py              # taxonomy, thresholds, paths
@@ -220,7 +257,7 @@ BPA_22/
 
 ## Documentation
 
-- [`documentation/classical_ml_workflow.md`](documentation/classical_ml_workflow.md) —
+- [`documentation/classical_ml_workflow(consider).md`](<documentation/classical_ml_workflow(consider).md>) —
   complete end-to-end walkthrough of the ML pipeline.
 - [`documentation/pipeline_architecture.md`](documentation/pipeline_architecture.md) —
   detailed system architecture.

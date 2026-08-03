@@ -1,0 +1,22 @@
+{
+  "name": "BPA-22 Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile.dev"
+  },
+  "workspaceFolder": "/workspace",
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+  "postCreateCommand": "python -m pip install -r requirements.txt && python -m pip install -e '.[dev]' && pre-commit install || true",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python"
+      },
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}

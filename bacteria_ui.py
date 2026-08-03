@@ -4,27 +4,30 @@ import json
 import sys
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QTimer, QPoint
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import (
-    QImage, QPixmap, QColor, QPainter, QPen, QBrush,
-    QLinearGradient, QFont, QPalette,
+    QBrush,
+    QColor,
+    QImage,
+    QLinearGradient,
+    QPainter,
+    QPalette,
+    QPixmap,
 )
 from PyQt5.QtWidgets import (
     QApplication,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
+    QStatusBar,
     QTextEdit,
     QVBoxLayout,
     QWidget,
-    QFrame,
-    QSizePolicy,
-    QStatusBar,
-    QGridLayout,
-    QScrollArea,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -36,30 +39,29 @@ from bacteria_assistant.config import MODEL_PATH
 from bacteria_assistant.features import read_image
 from bacteria_assistant.inference import predict_bacteria_image
 
-
 # ── Win95 / Win98 Classic Light Palette ─────────────────────────────────────
-W_DESKTOP      = "#008080"
-W_BG           = "#D4D0C8"
-W_PANEL        = "#D4D0C8"
-W_WHITE        = "#FFFFFF"
-W_TITLE_1      = "#000080"
-W_TITLE_2      = "#1084D0"
-W_TITLE_TEXT   = "#FFFFFF"
-W_TEXT         = "#000000"
-W_TEXT_GRAY    = "#444444"
-W_TEXT_DISABLED= "#808080"
-W_SHADOW       = "#808080"
-W_HIGHLIGHT    = "#FFFFFF"
-W_MIDLIGHT     = "#E8E4DC"
-W_INSET_BG     = "#FFFFFF"
+W_DESKTOP = "#008080"
+W_BG = "#D4D0C8"
+W_PANEL = "#D4D0C8"
+W_WHITE = "#FFFFFF"
+W_TITLE_1 = "#000080"
+W_TITLE_2 = "#1084D0"
+W_TITLE_TEXT = "#FFFFFF"
+W_TEXT = "#000000"
+W_TEXT_GRAY = "#444444"
+W_TEXT_DISABLED = "#808080"
+W_SHADOW = "#808080"
+W_HIGHLIGHT = "#FFFFFF"
+W_MIDLIGHT = "#E8E4DC"
+W_INSET_BG = "#FFFFFF"
 W_INSET_BORDER = "#808080"
-W_STATUS_BG    = "#D4D0C8"
-W_GREEN        = "#008000"
-W_RED          = "#CC0000"
-W_ORANGE       = "#CC6600"
-W_BLUE_LINK    = "#000080"
-W_BTN_FACE     = "#D4D0C8"
-W_MENU_BAR     = "#D4D0C8"
+W_STATUS_BG = "#D4D0C8"
+W_GREEN = "#008000"
+W_RED = "#CC0000"
+W_ORANGE = "#CC6600"
+W_BLUE_LINK = "#000080"
+W_BTN_FACE = "#D4D0C8"
+W_MENU_BAR = "#D4D0C8"
 
 GLOBAL_QSS = f"""
 * {{
@@ -264,9 +266,9 @@ class Win95TitleBar(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         grad = QLinearGradient(0, 0, self.width(), 0)
-        grad.setColorAt(0.0,  QColor(W_TITLE_1))
+        grad.setColorAt(0.0, QColor(W_TITLE_1))
         grad.setColorAt(0.55, QColor("#0050AA"))
-        grad.setColorAt(1.0,  QColor(W_TITLE_2))
+        grad.setColorAt(1.0, QColor(W_TITLE_2))
         painter.fillRect(self.rect(), QBrush(grad))
 
     def mousePressEvent(self, event):
@@ -517,10 +519,10 @@ class BacteriaPredictorUI(QMainWindow):
 
         self.result_vals: dict[str, QLabel] = {}
         for key, label in [
-            ("NAME",       "Bacteria Name"),
-            ("TYPE",       "Bacteria Type"),
-            ("SHAPE",      "Dominant Shape"),
-            ("COLONIES",   "Total Colonies"),
+            ("NAME", "Bacteria Name"),
+            ("TYPE", "Bacteria Type"),
+            ("SHAPE", "Dominant Shape"),
+            ("COLONIES", "Total Colonies"),
             ("CONFIDENCE", "Confidence"),
         ]:
             row_w, val_lbl = make_result_row(label)
@@ -549,9 +551,7 @@ class BacteriaPredictorUI(QMainWindow):
         det_cl.addWidget(self.output_text)
 
         self.output_placeholder = QLabel("Run analysis to view raw output.")
-        self.output_placeholder.setStyleSheet(
-            f"color: {W_TEXT_DISABLED}; font-size: 11px; border: none; padding: 8px;"
-        )
+        self.output_placeholder.setStyleSheet(f"color: {W_TEXT_DISABLED}; font-size: 11px; border: none; padding: 8px;")
         self.output_placeholder.setAlignment(Qt.AlignCenter)
         det_cl.addWidget(self.output_placeholder)
 
@@ -582,7 +582,8 @@ class BacteriaPredictorUI(QMainWindow):
             self,
             "Open Image",
             str(PROJECT_ROOT),
-            "Images (*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tif *.TIF *.tiff *.TIFF *.webp *.WEBP);;All Files (*)",
+            "Images (*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP "
+            "*.tif *.TIF *.tiff *.TIFF *.webp *.WEBP);;All Files (*)",
         )
         if not file_name:
             return
@@ -639,7 +640,8 @@ class BacteriaPredictorUI(QMainWindow):
         model_path = PROJECT_ROOT / MODEL_PATH
         if not model_path.exists():
             QMessageBox.warning(
-                self, "Model not found",
+                self,
+                "Model not found",
                 "Trained model not found.\nPlease run train_model.py first.",
             )
             return
@@ -649,7 +651,7 @@ class BacteriaPredictorUI(QMainWindow):
         QApplication.processEvents()
 
         try:
-            basic    = predict_bacteria_image(self.image_path, model_path=model_path, mode="basic")
+            basic = predict_bacteria_image(self.image_path, model_path=model_path, mode="basic")
             advanced = predict_bacteria_image(self.image_path, model_path=model_path, mode="advanced")
         except Exception as exc:
             QMessageBox.critical(self, "Prediction Failed", str(exc))
@@ -697,24 +699,24 @@ def main() -> None:
     app.setStyle("Fusion")
 
     pal = QPalette()
-    pal.setColor(QPalette.Window,          QColor(W_BG))
-    pal.setColor(QPalette.WindowText,      QColor(W_TEXT))
-    pal.setColor(QPalette.Base,            QColor(W_INSET_BG))
-    pal.setColor(QPalette.AlternateBase,   QColor(W_MIDLIGHT))
-    pal.setColor(QPalette.ToolTipBase,     QColor(W_INSET_BG))
-    pal.setColor(QPalette.ToolTipText,     QColor(W_TEXT))
-    pal.setColor(QPalette.Text,            QColor(W_TEXT))
-    pal.setColor(QPalette.Button,          QColor(W_BTN_FACE))
-    pal.setColor(QPalette.ButtonText,      QColor(W_TEXT))
-    pal.setColor(QPalette.BrightText,      QColor(W_RED))
-    pal.setColor(QPalette.Link,            QColor(W_BLUE_LINK))
-    pal.setColor(QPalette.Highlight,       QColor(W_TITLE_1))
+    pal.setColor(QPalette.Window, QColor(W_BG))
+    pal.setColor(QPalette.WindowText, QColor(W_TEXT))
+    pal.setColor(QPalette.Base, QColor(W_INSET_BG))
+    pal.setColor(QPalette.AlternateBase, QColor(W_MIDLIGHT))
+    pal.setColor(QPalette.ToolTipBase, QColor(W_INSET_BG))
+    pal.setColor(QPalette.ToolTipText, QColor(W_TEXT))
+    pal.setColor(QPalette.Text, QColor(W_TEXT))
+    pal.setColor(QPalette.Button, QColor(W_BTN_FACE))
+    pal.setColor(QPalette.ButtonText, QColor(W_TEXT))
+    pal.setColor(QPalette.BrightText, QColor(W_RED))
+    pal.setColor(QPalette.Link, QColor(W_BLUE_LINK))
+    pal.setColor(QPalette.Highlight, QColor(W_TITLE_1))
     pal.setColor(QPalette.HighlightedText, QColor(W_WHITE))
-    pal.setColor(QPalette.Light,           QColor(W_HIGHLIGHT))
-    pal.setColor(QPalette.Midlight,        QColor(W_MIDLIGHT))
-    pal.setColor(QPalette.Dark,            QColor(W_SHADOW))
-    pal.setColor(QPalette.Mid,             QColor("#A0A09A"))
-    pal.setColor(QPalette.Shadow,          QColor("#404040"))
+    pal.setColor(QPalette.Light, QColor(W_HIGHLIGHT))
+    pal.setColor(QPalette.Midlight, QColor(W_MIDLIGHT))
+    pal.setColor(QPalette.Dark, QColor(W_SHADOW))
+    pal.setColor(QPalette.Mid, QColor("#A0A09A"))
+    pal.setColor(QPalette.Shadow, QColor("#404040"))
     app.setPalette(pal)
 
     window = BacteriaPredictorUI()

@@ -3,27 +3,35 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from bacteria_assistant.config import MODEL_PATH
+from bacteria_assistant.config import DATASET_ROOT, MODEL_PATH
 from bacteria_assistant.inference import predict_bacteria_image
 
 
+def _model_path() -> Path:
+    path = PROJECT_ROOT / MODEL_PATH
+    if not path.exists():
+        pytest.skip(f"Trained model artifact not found at {path}. Run `make train` first.")
+    return path
+
+
 def _first_image() -> Path:
-    dataset_root = PROJECT_ROOT / "Bacteria dataset"
+    dataset_root = PROJECT_ROOT / DATASET_ROOT
+    if not dataset_root.exists():
+        pytest.skip(f"Dataset root not found at {dataset_root}. See CONTRIBUTING.md.")
     for path in dataset_root.rglob("*.png"):
         return path
     raise FileNotFoundError("No PNG image found in dataset.")
 
 
 def test_basic_output_contract() -> None:
-    model_path = PROJECT_ROOT / MODEL_PATH
-    if not model_path.exists():
-        # If model is not trained yet, skip this test naturally.
-        return
+    model_path = _model_path()
 
     output = predict_bacteria_image(_first_image(), model_path=model_path, mode="basic")
 
@@ -46,9 +54,7 @@ def test_basic_output_contract() -> None:
 
 
 def test_advanced_output_contract() -> None:
-    model_path = PROJECT_ROOT / MODEL_PATH
-    if not model_path.exists():
-        return
+    model_path = _model_path()
 
     output = predict_bacteria_image(_first_image(), model_path=model_path, mode="advanced")
 

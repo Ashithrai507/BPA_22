@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 
 from .config import (
-    MODEL_PATH,
     MIN_COLONIES_FOR_VALID,
     MIN_COLONY_CONFIDENCE,
     MIN_EDGE_DENSITY,
     MIN_LAPLACIAN_VAR,
     MIN_ORGANISM_CONFIDENCE,
     MIN_ORGANISM_TYPE_PROB,
+    MODEL_PATH,
     ORGANISM_METADATA,
     ORGANISMS_BY_GROUP,
     UNKNOWN_LABEL,
@@ -100,7 +100,7 @@ def _predict_species_with_group_constraint(
 
     classes = [str(c) for c in organism_model.classes_]
     probs = organism_model.predict_proba(image_vector)[0]
-    prob_map = {cls: float(prob) for cls, prob in zip(classes, probs)}
+    prob_map = {cls: float(prob) for cls, prob in zip(classes, probs, strict=False)}
 
     candidates = [org for org in ORGANISMS_BY_GROUP.get(predicted_group, []) if org in prob_map]
     if not candidates:
@@ -128,7 +128,8 @@ def predict_bacteria_image(
     organism_type_model = artifacts.get("organism_type_model")
     if organism_type_model is None:
         raise ValueError(
-            "Loaded artifact does not contain `organism_type_model`. Please retrain the model by running train_model.py."
+            "Loaded artifact does not contain `organism_type_model`. "
+            "Please retrain the model by running train_model.py."
         )
 
     predicted_organism_type = str(organism_type_model.predict(image_vector)[0])
@@ -138,7 +139,9 @@ def predict_bacteria_image(
 
     group_model = artifacts.get("group_model")
     if group_model is None:
-        raise ValueError("Loaded artifact does not contain `group_model`. Please retrain the model by running train_model.py.")
+        raise ValueError(
+            "Loaded artifact does not contain `group_model`. " "Please retrain the model by running train_model.py."
+        )
 
     predicted_group = str(group_model.predict(image_vector)[0])
 

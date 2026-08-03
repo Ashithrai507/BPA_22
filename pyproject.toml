@@ -1,9 +1,40 @@
- [project]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = "bacteria-lab-assistant"
 version = "0.1.0"
 description = "Bacteria prediction system for lab assistants"
 requires-python = ">=3.11"
 
+[project.optional-dependencies]
+dev = [
+    "ruff==0.6.9",
+    "pre-commit==3.8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["bacteria_assistant"]
+
+[tool.ruff.lint.per-file-ignores]
+# Entry scripts + tests add `src` to sys.path before importing the package.
+"bacteria_ui.py" = ["E402"]
+"predict_bacteria.py" = ["E402"]
+"train_model.py" = ["E402"]
+"tests/*.py" = ["E402"]

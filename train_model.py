@@ -10,7 +10,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from bacteria_assistant.config import MODEL_PATH
+from bacteria_assistant.config import DATASET_ROOT, MODEL_PATH
 from bacteria_assistant.training import train_models
 
 
@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset-csv",
         type=Path,
-        default=PROJECT_ROOT / "Bacteria dataset" / "dataset_full.csv",
+        default=PROJECT_ROOT / DATASET_ROOT / "dataset_full.csv",
         help="Path to dataset_full.csv",
     )
     parser.add_argument(

@@ -43,9 +43,7 @@ def _load_labeled_dataframe(dataset_csv: Path) -> pd.DataFrame:
         lambda x: ORGANISM_METADATA[str(x)]["organism_type"]
     )
     labeled_df.loc[:, "gram_label"] = labeled_df["organism"].map(lambda x: ORGANISM_METADATA[str(x)]["gram_label"])
-    labeled_df.loc[:, "shape_label"] = labeled_df["organism"].map(
-        lambda x: ORGANISM_METADATA[str(x)]["shape_label"]
-    )
+    labeled_df.loc[:, "shape_label"] = labeled_df["organism"].map(lambda x: ORGANISM_METADATA[str(x)]["shape_label"])
     labeled_df.loc[:, "taxonomy_group"] = labeled_df["organism"].map(
         lambda x: ORGANISM_METADATA[str(x)]["taxonomy_group"]
     )
@@ -367,7 +365,7 @@ def train_models(
         "organism_type_model": organism_type_model,
         "group_model": group_model,
         "organism_model": organism_model,
-    "group_species_models": group_species_models,
+        "group_species_models": group_species_models,
         "shape_model": shape_model,
         "image_feature_columns": image_feature_cols,
         "colony_feature_columns": colony_feature_cols,

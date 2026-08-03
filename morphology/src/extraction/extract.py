@@ -1,19 +1,12 @@
-import cv2
 import math
 
-from src.config import (
-    MIN_ASPECT_RATIO,
-    MAX_ASPECT_RATIO,
-    MIN_CIRCULARITY,
-    MIN_WIDTH,
-    MIN_HEIGHT
-)
+import cv2
+
+from src.config import MAX_ASPECT_RATIO, MIN_ASPECT_RATIO, MIN_CIRCULARITY, MIN_HEIGHT, MIN_WIDTH
+
 
 def extract_colonies(img, mask, min_area, max_area):
-
-    contours, _ = cv2.findContours(
-        mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     filtered_contours = []
     colonies = []
@@ -53,7 +46,7 @@ def extract_colonies(img, mask, min_area, max_area):
         w = min(img.shape[1] - x, w + 2 * pad)
         h = min(img.shape[0] - y, h + 2 * pad)
 
-        colony = img[y:y+h, x:x+w]
+        colony = img[y : y + h, x : x + w]
 
         filtered_contours.append(cnt)
         colonies.append(colony)
