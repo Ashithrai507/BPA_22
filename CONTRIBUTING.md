@@ -29,15 +29,15 @@ python -m venv .venv
 
 A `.devcontainer/` is provided for environment parity on Linux/macOS hosts
 (CLI, training, and testing only — the PyQt5 GUI needs a real display).
-It mounts your local `Bacteria dataset/` and `artifacts/` as volumes.
+It mounts your local `data/dataset` and `artifacts/` as volumes.
 
 ## 3. Getting the dataset and model artifact
 
-The **dataset** (`Bacteria dataset/`, ~302 MB) and the **trained model**
+The **dataset** (`data/dataset`, ~302 MB) and the **trained model**
 (`artifacts/bacteria_models.joblib`, ~662 MB) are **not stored in git**.
 They are shared manually (shared drive / direct copy).
 
-1. Copy the `Bacteria dataset/` folder into the repo root.
+1. Copy the dataset folder into `data/dataset` in the repo root.
 2. Run `make train` to build the model bundle (or copy an existing
    `artifacts/bacteria_models.joblib`).
 

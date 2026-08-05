@@ -109,7 +109,7 @@ ORGANISMS_BY_GROUP = {
     ],
 }
 
-DATASET_ROOT = _env_path("BACTERIA_DATASET_ROOT", "Bacteria dataset")
+DATASET_ROOT = _env_path("BACTERIA_DATASET_ROOT", "data/dataset")
 ARTIFACT_DIR = _env_path("BACTERIA_ARTIFACT_DIR", "artifacts")
 MODEL_PATH = _env_path("BACTERIA_MODEL_PATH", str(ARTIFACT_DIR / "bacteria_models.joblib"))
 

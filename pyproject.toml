@@ -34,7 +34,7 @@ known-first-party = ["bacteria_assistant"]
 
 [tool.ruff.lint.per-file-ignores]
 # Entry scripts + tests add `src` to sys.path before importing the package.
-"bacteria_ui.py" = ["E402"]
-"predict_bacteria.py" = ["E402"]
-"train_model.py" = ["E402"]
+"scripts/bacteria_ui.py" = ["E402"]
+"scripts/predict_bacteria.py" = ["E402"]
+"scripts/train_model.py" = ["E402"]
 "tests/*.py" = ["E402"]

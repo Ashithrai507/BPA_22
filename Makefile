@@ -20,8 +20,8 @@ install: ## Install dependencies into the active environment
 	$(PIP) install -r requirements.txt
 	$(PIP) install -e ".[dev]"
 
-train: ## Train the model bundle (requires Bacteria dataset/ present)
-	$(VENV_PYTHON) train_model.py
+train: ## Train the model bundle (requires data/dataset present)
+	$(VENV_PYTHON) scripts/train_model.py
 
 test: ## Run the test suite
 	$(PYTEST) -q
@@ -34,7 +34,7 @@ format: ## Auto-format code with ruff
 	$(RUFF) format .
 
 run-ui: ## Launch the desktop UI
-	$(VENV_PYTHON) bacteria_ui.py
+	$(VENV_PYTHON) scripts/bacteria_ui.py
 
 ci-upload-artifact: ## Upload the trained artifact so CI can run full tests (needs dataset + gh auth)
 	gh release view model-artifact >/dev/null 2>&1 || gh release create model-artifact --title "Trained model artifact" --notes "Seeded for CI. Regenerate with 'make train'."

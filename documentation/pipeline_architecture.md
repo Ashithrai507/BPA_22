@@ -56,7 +56,7 @@ This document provides a **deep, step‑by‑step explanation** of how morpholog
 ## 2) Dataset & Taxonomy Definition
 
 ### 2.1 Dataset location
-- Root: `Bacteria dataset/`
+- Root: `data/dataset/`
 - CSVs used:
   - `dataset_full.csv` (image path + organism + imaging type)
   - `dataset_labels.csv` (class metadata)
@@ -219,7 +219,7 @@ Implemented in `src/bacteria_assistant/inference.py`.
 ```
 ┌────────────────────────────────────────────────────────┐
 │                    UI / CLI Layer                      │
-│ (PyQt5 UI, train_model.py, predict_bacteria.py)        │
+│           (PyQt5 UI, scripts/*.py runners)             │
 └──────────────────────────┬─────────────────────────────┘
                   │ Image Upload / Path
                   ▼
@@ -255,7 +255,7 @@ Implemented in `src/bacteria_assistant/inference.py`.
 
 ## 8) UI Layer (PyQt5)
 
-**File:** `bacteria_ui.py`
+**File:** `scripts/bacteria_ui.py`
 
 Features:
 - Upload image
@@ -300,6 +300,6 @@ Core libraries:
 - `src/bacteria_assistant/features.py` → preprocessing + colony features
 - `src/bacteria_assistant/training.py` → training pipeline
 - `src/bacteria_assistant/inference.py` → inference pipeline
-- `bacteria_ui.py` → UI layer
-- `train_model.py` / `predict_bacteria.py` → CLI runners
+- `scripts/bacteria_ui.py` → UI layer
+- `scripts/train_model.py` / `scripts/predict_bacteria.py` → CLI runners
 - `tests/test_output_contract.py` → output validation

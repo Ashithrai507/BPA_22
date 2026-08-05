@@ -62,7 +62,7 @@ Core dependencies: `numpy`, `pandas`, `scikit-learn`, `opencv-python-headless`,
 ### 1. Train the model bundle
 
 ```bash
-python train_model.py
+python scripts/train_model.py
 ```
 
 Artifacts written to:
@@ -77,20 +77,20 @@ Artifacts written to:
 
 ```bash
 # Basic output
-python predict_bacteria.py \
-  --image "Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" \
+python scripts/predict_bacteria.py \
+  --image "data/dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" \
   --mode basic
 
 # Advanced output (per-colony measurements + morphology summary)
-python predict_bacteria.py \
-  --image "Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" \
+python scripts/predict_bacteria.py \
+  --image "data/dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png" \
   --mode advanced
 ```
 
 ### 3. Launch the desktop UI
 
 ```bash
-python bacteria_ui.py
+python scripts/bacteria_ui.py
 ```
 
 - Open an image (PNG / JPG / BMP / TIFF / WEBP)
@@ -114,7 +114,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contributor workflow.
 
 ```bash
 make setup        # venv + runtime + dev deps
-make train        # rebuild the model bundle (needs Bacteria dataset/ present)
+make train        # rebuild the model bundle (needs data/dataset present)
 make test         # run tests
 make lint         # ruff check + format check
 make format       # auto-format with ruff
@@ -122,9 +122,10 @@ make run-ui       # launch the desktop UI
 make help         # list all targets
 ```
 
-**Dataset & artifact are not in git.** Copy `Bacteria dataset/` (~302 MB) into the
-repo root and run `make train`, or copy an existing `artifacts/bacteria_models.joblib`
-(~662 MB). Per-developer paths can be overridden via `.env` (see `.env.example`).
+**Dataset & artifact are not in git.** Copy the dataset (~302 MB) into
+`data/dataset` and run `make train`, or copy an existing
+`artifacts/bacteria_models.joblib` (~662 MB). Per-developer paths can be
+overridden via `.env` (see `.env.example`).
 
 CI (GitHub Actions) runs lint + full tests on every PR. Because CI has no dataset,
 it uses a seeded model artifact (Actions cache, falling back to the `model-artifact`
@@ -227,30 +228,39 @@ Every classifier is auto-selected between **RandomForest**, **ExtraTrees**, and
 
 ```
 BPA_22/
-├── bacteria_ui.py                 # PyQt5 desktop UI
-├── train_model.py                 # CLI: train + save artifacts
-├── predict_bacteria.py            # CLI: predict on a single image
+├── scripts/                       # CLI entry points
+│   ├── bacteria_ui.py             # PyQt5 desktop UI
+│   ├── train_model.py             # train + save artifacts
+│   ├── predict_bacteria.py        # predict on a single image
+│   └── run_protein_pipeline.py    # Phase 2: species -> protein sequence
+├── src/
+│   ├── bacteria_assistant/        # Phase 1: CV/ML pipeline
+│   │   ├── config.py              # taxonomy, thresholds, paths
+│   │   ├── features.py            # image + colony feature extraction
+│   │   ├── training.py            # hierarchical training pipeline
+│   │   └── inference.py           # prediction + output assembly
+│   └── protein_engine/            # Phase 2: protein retrieval engine
+│       ├── taxonomy/              # species name + NCBI taxonomy ID
+│       ├── retrieval/             # UniProt / NCBI / PDB clients + cache
+│       ├── ranking/               # essential / virulence / resistance scoring
+│       └── sequence/              # validation + FASTA/JSON export
+├── morphology/                    # standalone prototype pipeline (research)
+├── tests/
+│   └── test_output_contract.py    # JSON output contract tests
+├── data/                          # dataset + test images (not in git)
+├── reference_data/                # curated ranking DBs (not in git)
+├── output/                        # pipeline runtime outputs (not in git)
+├── artifacts/                     # trained model bundle + metrics (not in git)
+├── documentation/                 # architecture & workflow deep-dives
 ├── Makefile                       # dev workflow targets (setup/train/test/lint/...)
 ├── pyproject.toml                 # packaging, pytest, ruff config
 ├── requirements.txt               # pinned runtime dependencies
 ├── .env.example                   # optional per-dev path overrides
 ├── CONTRIBUTING.md                # contributor workflow
 ├── .pre-commit-config.yaml        # optional git hooks
-├── .github/
-│   ├── workflows/ci.yml           # lint + tests on every PR
-│   └── PULL_REQUEST_TEMPLATE.md
-├── .devcontainer/                 # optional Docker dev container
-├── src/
-│   └── bacteria_assistant/
-│       ├── config.py              # taxonomy, thresholds, paths
-│       ├── features.py            # image + colony feature extraction
-│       ├── training.py            # hierarchical training pipeline
-│       └── inference.py           # prediction + output assembly
-├── morphology/                    # standalone prototype pipeline (research)
-├── tests/
-│   └── test_output_contract.py    # JSON output contract tests
-├── documentation/                 # architecture & workflow deep-dives
-└── artifacts/                     # trained model bundle + metrics
+└── .github/
+    ├── workflows/ci.yml           # lint + tests on every PR
+    └── PULL_REQUEST_TEMPLATE.md
 ```
 
 ---

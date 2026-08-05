@@ -129,7 +129,7 @@ def predict_bacteria_image(
     if organism_type_model is None:
         raise ValueError(
             "Loaded artifact does not contain `organism_type_model`. "
-            "Please retrain the model by running train_model.py."
+            "Please retrain the model by running scripts/train_model.py."
         )
 
     predicted_organism_type = str(organism_type_model.predict(image_vector)[0])
@@ -140,7 +140,8 @@ def predict_bacteria_image(
     group_model = artifacts.get("group_model")
     if group_model is None:
         raise ValueError(
-            "Loaded artifact does not contain `group_model`. " "Please retrain the model by running train_model.py."
+            "Loaded artifact does not contain `group_model`. "
+            "Please retrain the model by running scripts/train_model.py."
         )
 
     predicted_group = str(group_model.predict(image_vector)[0])
@@ -148,7 +149,8 @@ def predict_bacteria_image(
     organism_model = artifacts.get("organism_model")
     if organism_model is None:
         raise ValueError(
-            "Loaded artifact does not contain `organism_model`. Please retrain the model by running train_model.py."
+            "Loaded artifact does not contain `organism_model`. "
+            "Please retrain the model by running scripts/train_model.py."
         )
 
     predicted_bacteria_name, organism_confidence = _predict_species_with_group_constraint(

@@ -3,7 +3,7 @@
 This document lists the end‑to‑end steps taken to build the bacteria prediction system, including model training, output contracts, taxonomy fixes, UI creation, and accuracy improvements.
 
 ## 1) Workspace discovery & dataset validation
-- Inspected project structure and confirmed dataset root: `Bacteria dataset/`.
+- Inspected project structure and confirmed dataset root: `data/dataset`.
 - Validated CSV metadata (`dataset_full.csv`, `dataset_labels.csv`, `dataset_summary.csv`) to map image paths and organisms.
 - Confirmed available images by class and imaging type (gram stain / media plate).
 
@@ -14,8 +14,8 @@ This document lists the end‑to‑end steps taken to build the bacteria predict
   - `training.py` (model training + metrics)
   - `inference.py` (prediction + output contract)
 - Added runners:
-  - `train_model.py` (train + save artifacts)
-  - `predict_bacteria.py` (predict on any image)
+  - `scripts/train_model.py` (train + save artifacts)
+  - `scripts/predict_bacteria.py` (predict on any image)
 - Added `requirements.txt`, `pyproject.toml` for dependencies/pytest setup.
 - Added `README.md` with usage and output examples.
 - Added initial test: `tests/test_output_contract.py`.
@@ -61,7 +61,7 @@ This document lists the end‑to‑end steps taken to build the bacteria predict
 - Retrained and compared metrics after each improvement.
 
 ## 9) PyQt5 UI creation (retro Windows style)
-- Built `bacteria_ui.py` with:
+- Built `scripts/bacteria_ui.py` with:
   - Upload image
   - Predict button
   - Summary output
