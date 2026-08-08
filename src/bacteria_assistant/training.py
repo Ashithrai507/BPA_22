@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -124,6 +124,7 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
         for colony in colonies:
             features = colony_to_feature_dict(colony)
             features["shape_label"] = image_shape_label
+            features["image_id"] = str(image_path)
             features["imaging_type"] = sample["imaging_type"]
             rows.append(features)
 
@@ -165,6 +166,29 @@ def _clean_colony_label_table(colony_table: pd.DataFrame) -> tuple[pd.DataFrame,
         "colony_cleaning_removals": removals,
     }
     return cleaned, stats
+
+
+def _split_colonies_by_image(
+    colony_table: pd.DataFrame,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> tuple[pd.Index, pd.Index]:
+    """Split colony rows by image so no plate leaks between train and test (issue #6)."""
+    if colony_table.empty or "image_id" not in colony_table.columns:
+        raise ValueError("colony_table must be non-empty and contain an image_id column.")
+
+    n_images = colony_table["image_id"].nunique()
+    n_test_images = int(np.ceil(test_size * n_images))
+    n_train_images = n_images - n_test_images
+    if n_test_images == 0 or n_train_images == 0:
+        raise ValueError(
+            f"Cannot build an image-level split: {n_images} images yield "
+            f"{n_train_images} train / {n_test_images} test images for test_size={test_size}."
+        )
+
+    splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+    train_pos, test_pos = next(splitter.split(colony_table, groups=colony_table["image_id"].to_numpy()))
+    return colony_table.index[train_pos], colony_table.index[test_pos]
 
 
 def _classification_summary(
@@ -487,16 +511,17 @@ def train_models(
     if colony_table.empty:
         raise ValueError("Could not detect colonies in training images.")
 
-    xs = colony_table[colony_feature_cols]
     ys = colony_table["shape_label"]
 
-    xs_train, xs_test, ys_train, ys_test = train_test_split(
-        xs,
-        ys,
+    shape_train_idx, shape_test_idx = _split_colonies_by_image(
+        colony_table,
         test_size=0.2,
         random_state=random_state,
-        stratify=ys,
     )
+    xs_train = colony_table.loc[shape_train_idx, colony_feature_cols]
+    ys_train = colony_table.loc[shape_train_idx, "shape_label"]
+    xs_test = colony_table.loc[shape_test_idx, colony_feature_cols]
+    ys_test = colony_table.loc[shape_test_idx, "shape_label"]
 
     shape_model, shape_summary, shape_model_name = _fit_best_ensemble_model(
         xs_train,

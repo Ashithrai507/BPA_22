@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from sklearn.ensemble import RandomForestClassifier
@@ -148,3 +149,48 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
     assert meta["colony_cleaning_removals"]["bacilli"] == 5
     assert meta["colony_cleaning_removals"]["fungal"] == 5
     assert meta["colony_cleaning_removals"]["spiral"] == 0
+
+
+def test_split_colonies_by_image_no_shared_images() -> None:
+    rng = np.random.default_rng(0)
+    image_ids = [f"img_{i}" for i in range(50)]
+    rows = []
+    for img in image_ids:
+        for _ in range(4):
+            rows.append(
+                {
+                    "image_id": img,
+                    "shape_label": "cocci" if rng.random() < 0.5 else "bacilli",
+                    "aspect_ratio": 1.0,
+                    "solidity": 0.9,
+                    "imaging_type": "gram",
+                }
+            )
+    colony_table = pd.DataFrame(rows)
+
+    train_idx, test_idx = training._split_colonies_by_image(colony_table, random_state=42)
+
+    train_images = set(colony_table.loc[train_idx, "image_id"])
+    test_images = set(colony_table.loc[test_idx, "image_id"])
+    assert train_images.isdisjoint(test_images)
+    assert len(train_idx) > 0 and len(test_idx) > 0
+    assert len(train_idx) + len(test_idx) == len(colony_table)
+
+
+def test_split_colonies_by_image_reproducible() -> None:
+    colony_table = _colony_table()
+    colony_table = pd.concat([colony_table] * 3, ignore_index=True)
+
+    a_train, a_test = training._split_colonies_by_image(colony_table, random_state=7)
+    b_train, b_test = training._split_colonies_by_image(colony_table, random_state=7)
+
+    assert a_train.equals(b_train)
+    assert a_test.equals(b_test)
+
+
+def test_split_colonies_by_image_raises_when_no_test_split_possible() -> None:
+    colony_table = _colony_table()
+    single = colony_table.iloc[[0]].copy()
+
+    with pytest.raises(ValueError):
+        training._split_colonies_by_image(single, test_size=0.2, random_state=42)
