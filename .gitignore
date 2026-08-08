@@ -59,6 +59,7 @@ results/
 debug/
 models/
 artifacts/
+cache/
 
 # Environment
 .env

@@ -251,7 +251,8 @@ BPA_22/
 │       ├── taxonomy/              # species name + NCBI taxonomy ID
 │       ├── retrieval/             # UniProt / NCBI / PDB clients + cache
 │       ├── ranking/               # essential / virulence / resistance scoring
-│       └── sequence/              # validation + FASTA/JSON export
+│       ├── sequence/              # validation + FASTA/JSON export
+│       └── documentation/         # design & architecture specs
 ├── morphology/                    # standalone prototype pipeline (research)
 ├── tests/
 │   ├── test_output_contract.py    # JSON output contract tests
@@ -282,6 +283,12 @@ BPA_22/
 - [`documentation/pipeline_architecture.md`](documentation/pipeline_architecture.md) —
   detailed system architecture.
 - [`documentation/follow.md`](documentation/follow.md) — feature/spec notes.
+- [`src/protein_engine/documentation/design.md`](src/protein_engine/documentation/design.md) —
+  Phase 2 protein engine system design.
+- [`src/protein_engine/documentation/architecture.md`](src/protein_engine/documentation/architecture.md) —
+  Phase 2 protein engine technical architecture.
+- [`docs/superpowers/specs/2026-08-06-protein-engine-design.md`](docs/superpowers/specs/2026-08-06-protein-engine-design.md) —
+  Phase 2 protein engine design spec (pending review).
 
 ---
 
