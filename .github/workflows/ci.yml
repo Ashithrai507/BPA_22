@@ -46,8 +46,9 @@ jobs:
           lookup-only: true
       - name: Download model artifact (release)
         if: steps.cache-restore.outputs.cache-hit != 'true'
-        run: gh release download model-artifact --clobber || true
-        working-directory: artifacts
+        run: |
+          mkdir -p artifacts
+          gh release download model-artifact --clobber --dir artifacts || true
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Verify model artifact
