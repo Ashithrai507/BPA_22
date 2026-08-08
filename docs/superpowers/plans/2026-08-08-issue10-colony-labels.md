@@ -258,7 +258,11 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
             "r_mean": [0.5, 0.6],
         }
     ))
-    monkeypatch.setattr(training, "_fit_best_ensemble_model", lambda *a, **k: (RandomForestClassifier(), {"accuracy": 1.0}, "constant"))
+    monkeypatch.setattr(
+        training,
+        "_fit_best_ensemble_model",
+        lambda *a, **k: (RandomForestClassifier(), {"accuracy": 1.0}, "constant"),
+    )
 
     metrics = training.train_models(
         dataset_csv=csv_path,
