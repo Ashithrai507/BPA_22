@@ -80,6 +80,16 @@ SUPPORTED_SHAPES = ("cocci", "bacilli", "spiral", "fungal")
 
 UNKNOWN_LABEL = "unknown"
 
+# Heuristic cleaning for colony shape training labels (issue #10).
+# A colony row is dropped when its geometry strongly contradicts the parent
+# image's shape_label. Thresholds are deliberately conservative; tune with
+# `make evaluate` on the shape model.
+SHAPE_CLEANING_RULES = {
+    "cocci": {"max_aspect_ratio": 2.0},
+    "bacilli": {"min_aspect_ratio": 1.2},
+    "fungal": {"max_solidity": 0.95},
+}
+
 # Rejection thresholds to flag out-of-distribution images.
 MIN_ORGANISM_CONFIDENCE = 0.55
 MIN_COLONY_CONFIDENCE = 0.45

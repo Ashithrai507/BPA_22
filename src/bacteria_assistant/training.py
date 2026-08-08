@@ -20,6 +20,8 @@ from .config import (
     FEATURE_VERSION,
     MODEL_PATH,
     ORGANISM_METADATA,
+    SHAPE_CLEANING_RULES,
+    SUPPORTED_SHAPES,
     normalize_organism_name,
 )
 from .features import (
@@ -126,6 +128,43 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
             rows.append(features)
 
     return pd.DataFrame(rows)
+
+
+def _clean_colony_label_table(colony_table: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Drop colony rows whose geometry contradicts their shape_label (issue #10).
+
+    Returns the cleaned table and removal statistics for `training_meta`.
+    Removal counts are emitted for every supported shape so the audit trail is
+    complete (shapes without a rule always report 0).
+    """
+    removals: dict[str, int] = {shape: 0 for shape in SUPPORTED_SHAPES}
+    if colony_table.empty:
+        stats = {
+            "colony_rows_before_cleaning": 0,
+            "colony_rows_removed_by_cleaning": 0,
+            "colony_cleaning_removals": removals,
+        }
+        return colony_table.copy(), stats
+
+    keep = pd.Series(True, index=colony_table.index)
+    for shape_label, rules in SHAPE_CLEANING_RULES.items():
+        contradict = colony_table["shape_label"] == shape_label
+        if "max_aspect_ratio" in rules:
+            contradict &= colony_table["aspect_ratio"] > rules["max_aspect_ratio"]
+        if "min_aspect_ratio" in rules:
+            contradict &= colony_table["aspect_ratio"] < rules["min_aspect_ratio"]
+        if "max_solidity" in rules:
+            contradict &= colony_table["solidity"] > rules["max_solidity"]
+        removals[shape_label] = int(contradict.sum())
+        keep &= ~contradict
+
+    cleaned = colony_table.loc[keep].copy()
+    stats = {
+        "colony_rows_before_cleaning": int(len(colony_table)),
+        "colony_rows_removed_by_cleaning": int((~keep).sum()),
+        "colony_cleaning_removals": removals,
+    }
+    return cleaned, stats
 
 
 def _classification_summary(
