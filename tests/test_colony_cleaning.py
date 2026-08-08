@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from sklearn.ensemble import RandomForestClassifier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -87,3 +88,63 @@ def test_clean_colony_label_table_empty_frame() -> None:
         "spiral": 0,
         "fungal": 0,
     }
+
+
+def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> None:
+    csv_path = tmp_path / "dataset.csv"
+    pd.DataFrame(
+        {
+            "organism": ["Staphylococcus aureus", "Staphylococcus aureus"],
+            "image_path": ["img_a.png", "img_b.png"],
+            "imaging_type": ["gram", "gram"],
+        }
+    ).to_csv(csv_path, index=False)
+
+    colony_table = pd.concat(
+        [
+            pd.DataFrame(
+                {
+                    "image_id": ["img_a", "img_b", "img_c", "img_d", "img_e", "img_f"],
+                    "shape_label": ["cocci", "cocci", "bacilli", "bacilli", "fungal", "spiral"],
+                    "aspect_ratio": [1.1, 3.0, 1.8, 1.05, 1.4, 2.5],
+                    "solidity": [0.97, 0.98, 0.96, 0.93, 0.99, 0.9],
+                    "imaging_type": ["gram", "gram", "plate", "plate", "gram", "plate"],
+                }
+            )
+        ]
+        * 5,
+        ignore_index=True,
+    )
+    monkeypatch.setattr(training, "_build_colony_feature_table", lambda labeled_df, workspace_root: colony_table)
+    monkeypatch.setattr(training, "_build_image_feature_table", lambda labeled_df, workspace_root: pd.DataFrame(
+        {
+            "image_path": ["img_a.png", "img_b.png"],
+            "organism": ["Staphylococcus aureus", "Staphylococcus aureus"],
+            "organism_type": ["bacteria", "bacteria"],
+            "gram_label": ["gram_positive", "gram_positive"],
+            "shape_label": ["cocci", "cocci"],
+            "taxonomy_group": ["gram_positive_cocci", "gram_positive_cocci"],
+            "imaging_type": ["gram", "gram"],
+            "r_mean": [0.5, 0.6],
+        }
+    ))
+    monkeypatch.setattr(
+        training,
+        "_fit_best_ensemble_model",
+        lambda *a, **k: (RandomForestClassifier(), {"accuracy": 1.0}, "constant"),
+    )
+
+    metrics = training.train_models(
+        dataset_csv=csv_path,
+        workspace_root=tmp_path,
+        model_output_path=tmp_path / "models.joblib",
+        random_state=42,
+    )
+
+    meta = metrics["training_meta"]
+    assert meta["colony_rows_before_cleaning"] == 30
+    assert meta["colony_rows_removed_by_cleaning"] == 15
+    assert meta["colony_cleaning_removals"]["cocci"] == 5
+    assert meta["colony_cleaning_removals"]["bacilli"] == 5
+    assert meta["colony_cleaning_removals"]["fungal"] == 5
+    assert meta["colony_cleaning_removals"]["spiral"] == 0

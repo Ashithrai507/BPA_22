@@ -480,7 +480,10 @@ def train_models(
     )
 
     colony_table = _build_colony_feature_table(labeled_df, workspace_root)
-    colony_feature_cols = [c for c in colony_table.columns if c not in {"shape_label", "imaging_type"}]
+    colony_table, colony_cleaning_stats = _clean_colony_label_table(colony_table)
+    colony_feature_cols = [
+        c for c in colony_table.columns if c not in {"shape_label", "imaging_type", "image_id"}
+    ]
     if colony_table.empty:
         raise ValueError("Could not detect colonies in training images.")
 
@@ -530,6 +533,9 @@ def train_models(
             "group_train_samples": int(len(train_table)),
             "organism_train_samples": int(len(train_table)),
             "colony_train_samples": int(len(colony_table)),
+            "colony_rows_before_cleaning": int(colony_cleaning_stats["colony_rows_before_cleaning"]),
+            "colony_rows_removed_by_cleaning": int(colony_cleaning_stats["colony_rows_removed_by_cleaning"]),
+            "colony_cleaning_removals": dict(colony_cleaning_stats["colony_cleaning_removals"]),
             "feature_version": FEATURE_VERSION,
         },
         "model_choices": {
