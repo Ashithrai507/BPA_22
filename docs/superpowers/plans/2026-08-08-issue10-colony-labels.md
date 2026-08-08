@@ -50,7 +50,7 @@ if str(SRC_ROOT) not in sys.path:
 import bacteria_assistant.training as training
 
 
-def _colony_table(**overrides: dict[str, list]) -> pd.DataFrame:
+def _colony_table(**overrides: list) -> pd.DataFrame:
     base = {
         "image_id": ["img_a", "img_a", "img_b", "img_b", "img_c", "img_d"],
         "shape_label": ["cocci", "cocci", "bacilli", "bacilli", "fungal", "spiral"],
@@ -67,9 +67,9 @@ def test_clean_colony_label_table_removes_contradicting_rows() -> None:
 
     cleaned, stats = training._clean_colony_label_table(df)
 
-    remaining = cleaned["image_id"].tolist()
-    assert "img_a" not in remaining
-    assert "img_d" in remaining
+    # Per-row semantics: img_a/img_b keep their valid rows; img_c's only
+    # (contradicting) row is dropped; img_d (spiral, no rule) is untouched.
+    assert set(cleaned["image_id"]) == {"img_a", "img_b", "img_d"}
     assert set(cleaned["shape_label"]) == {"cocci", "bacilli", "spiral"}
 
 
@@ -142,7 +142,7 @@ SHAPE_CLEANING_RULES = {
 - [ ] **Step 4: Implement the cleaning filter**
 
 In `src/bacteria_assistant/training.py`:
-- Import `SHAPE_CLEANING_RULES` from `.config`.
+- Update the `.config` import to: `from .config import MODEL_PATH, ORGANISM_METADATA, SUPPORTED_SHAPES, SHAPE_CLEANING_RULES, normalize_organism_name`
 - Add this function after `_build_colony_feature_table`:
 
 ```python
@@ -150,17 +150,19 @@ def _clean_colony_label_table(colony_table: pd.DataFrame) -> tuple[pd.DataFrame,
     """Drop colony rows whose geometry contradicts their shape_label (issue #10).
 
     Returns the cleaned table and removal statistics for `training_meta`.
+    Removal counts are emitted for every supported shape so the audit trail is
+    complete (shapes without a rule always report 0).
     """
+    removals: dict[str, int] = {shape: 0 for shape in SUPPORTED_SHAPES}
     if colony_table.empty:
         stats = {
             "colony_rows_before_cleaning": 0,
             "colony_rows_removed_by_cleaning": 0,
-            "colony_cleaning_removals": {shape: 0 for shape in SHAPE_CLEANING_RULES},
+            "colony_cleaning_removals": removals,
         }
         return colony_table.copy(), stats
 
     keep = pd.Series(True, index=colony_table.index)
-    removals: dict[str, int] = {}
     for shape_label, rules in SHAPE_CLEANING_RULES.items():
         contradict = colony_table["shape_label"] == shape_label
         if "max_aspect_ratio" in rules:
