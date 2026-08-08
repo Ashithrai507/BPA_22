@@ -5,9 +5,10 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
@@ -86,17 +87,79 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
         for colony in colonies:
             features = colony_to_feature_dict(colony)
             features["shape_label"] = image_shape_label
+            features["imaging_type"] = sample["imaging_type"]
             rows.append(features)
 
     return pd.DataFrame(rows)
 
 
-def _classification_summary(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
+def _classification_summary(
+    y_true: list[str],
+    y_pred: list[str],
+    scoring_method: str = "accuracy",
+    modalities: pd.Series | None = None,
+) -> dict[str, Any]:
     report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
-    return {
+    summary: dict[str, Any] = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
+        "scoring_method": scoring_method,
         "report": report,
     }
+    if scoring_method == "balanced_accuracy":
+        summary["balanced_accuracy"] = float(balanced_accuracy_score(y_true, y_pred))
+    if modalities is not None:
+        summary["per_modality_accuracy"] = _per_modality_accuracy(y_true, y_pred, modalities)
+    return summary
+
+
+def _oversample_train(
+    x_train: pd.DataFrame,
+    y_train: pd.Series,
+    random_state: int,
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Bootstrap minority classes up to the majority count within the training fold.
+
+    Only the training split is resampled here (callers pass the train fold), so the
+    test split is never touched — no label leakage.
+    """
+    counts = y_train.value_counts()
+    target = int(counts.max())
+    if counts.min() == target:
+        return x_train.copy(), y_train.copy()
+
+    rng = np.random.default_rng(random_state)
+    parts: list[np.ndarray] = []
+    for label, count in counts.items():
+        class_idx = y_train[y_train == label].index.to_numpy()
+        if count < target:
+            extra = rng.choice(class_idx, size=target - count, replace=True)
+            parts.append(np.concatenate([class_idx, extra]))
+        else:
+            parts.append(class_idx)
+
+    row_index = np.concatenate(parts)
+    return x_train.loc[row_index].copy(), y_train.loc[row_index].copy()
+
+
+def _per_modality_accuracy(
+    y_true: list[str],
+    y_pred: list[str],
+    modalities: pd.Series,
+) -> dict[str, float]:
+    true_arr = np.asarray(y_true)
+    pred_arr = np.asarray(y_pred)
+    mod_arr = np.asarray(modalities)
+    out: dict[str, float] = {}
+    for modality in sorted(set(mod_arr)):
+        mask = mod_arr == modality
+        out[str(modality)] = float(accuracy_score(true_arr[mask], pred_arr[mask]))
+    return out
+
+
+_SCORING_METRICS = {
+    "accuracy": accuracy_score,
+    "balanced_accuracy": balanced_accuracy_score,
+}
 
 
 def _fit_best_ensemble_model(
@@ -105,47 +168,62 @@ def _fit_best_ensemble_model(
     x_test: pd.DataFrame,
     y_test: pd.Series,
     random_state: int,
+    scoring: str = "accuracy",
+    test_modalities: pd.Series | None = None,
+    candidates: list[tuple[str, Any]] | None = None,
 ) -> tuple[Any, dict[str, Any], str]:
-    candidates: list[tuple[str, Any]] = [
-        (
-            "random_forest",
-            RandomForestClassifier(
-                n_estimators=380,
-                random_state=random_state,
-                class_weight="balanced_subsample",
-                n_jobs=-1,
+    if scoring not in _SCORING_METRICS:
+        raise ValueError(f"Unsupported scoring metric: {scoring!r}")
+    scoring_fn = _SCORING_METRICS[scoring]
+
+    if candidates is None:
+        candidates = [
+            (
+                "random_forest",
+                RandomForestClassifier(
+                    n_estimators=380,
+                    random_state=random_state,
+                    class_weight="balanced_subsample",
+                    n_jobs=-1,
+                ),
             ),
-        ),
-        (
-            "extra_trees",
-            ExtraTreesClassifier(
-                n_estimators=520,
-                random_state=random_state,
-                class_weight="balanced_subsample",
-                n_jobs=-1,
+            (
+                "extra_trees",
+                ExtraTreesClassifier(
+                    n_estimators=520,
+                    random_state=random_state,
+                    class_weight="balanced_subsample",
+                    n_jobs=-1,
+                ),
             ),
-        ),
-        (
-            "knn_scaled",
-            make_pipeline(
-                StandardScaler(),
-                KNeighborsClassifier(n_neighbors=5, weights="distance"),
+            (
+                "knn_scaled",
+                make_pipeline(
+                    StandardScaler(),
+                    KNeighborsClassifier(n_neighbors=5, weights="distance"),
+                ),
             ),
-        ),
-    ]
+        ]
+
+    x_train_res, y_train_res = _oversample_train(x_train, y_train, random_state)
 
     best_name = ""
     best_model: Any = None
     best_summary: dict[str, Any] | None = None
-    best_acc = -1.0
+    best_score = -1.0
 
     for model_name, model in candidates:
-        model.fit(x_train, y_train)
+        model.fit(x_train_res, y_train_res)
         pred = model.predict(x_test)
-        summary = _classification_summary(list(y_test), list(pred))
-        acc = float(summary["accuracy"])
-        if acc > best_acc:
-            best_acc = acc
+        summary = _classification_summary(
+            list(y_test),
+            list(pred),
+            scoring_method=scoring,
+            modalities=test_modalities,
+        )
+        score = float(scoring_fn(list(y_test), list(pred)))
+        if score > best_score:
+            best_score = score
             best_name = model_name
             best_model = model
             best_summary = summary
@@ -200,6 +278,7 @@ def _train_group_species_models(
                 x_test,
                 y_test,
                 random_state=random_state,
+                test_modalities=group_df.loc[x_test.index, "imaging_type"],
             )
         else:
             x_train, x_test, y_train, y_test = train_test_split(
@@ -214,6 +293,7 @@ def _train_group_species_models(
                 x_test,
                 y_test,
                 random_state=random_state,
+                test_modalities=group_df.loc[x_test.index, "imaging_type"],
             )
 
         group_models[group_name] = model
@@ -273,6 +353,7 @@ def train_models(
         xg_test,
         yg_test,
         random_state=random_state,
+        test_modalities=image_table.loc[xg_test.index, "imaging_type"],
     )
 
     xt = image_table[image_feature_cols]
@@ -291,6 +372,8 @@ def train_models(
         xt_test,
         yt_test,
         random_state=random_state,
+        scoring="balanced_accuracy",
+        test_modalities=image_table.loc[xt_test.index, "imaging_type"],
     )
 
     xgroup = image_table[image_feature_cols]
@@ -309,6 +392,7 @@ def train_models(
         xgroup_test,
         ygroup_test,
         random_state=random_state,
+        test_modalities=image_table.loc[xgroup_test.index, "imaging_type"],
     )
 
     xo = image_table[image_feature_cols]
@@ -328,6 +412,7 @@ def train_models(
         xo_test,
         yo_test,
         random_state=random_state,
+        test_modalities=image_table.loc[xo_test.index, "imaging_type"],
     )
 
     group_species_models, group_species_metrics, group_species_model_choices = _train_group_species_models(
@@ -337,7 +422,7 @@ def train_models(
     )
 
     colony_table = _build_colony_feature_table(labeled_df, workspace_root)
-    colony_feature_cols = [c for c in colony_table.columns if c != "shape_label"]
+    colony_feature_cols = [c for c in colony_table.columns if c not in {"shape_label", "imaging_type"}]
     if colony_table.empty:
         raise ValueError("Could not detect colonies in training images.")
 
@@ -358,6 +443,7 @@ def train_models(
         xs_test,
         ys_test,
         random_state=random_state,
+        test_modalities=colony_table.loc[xs_test.index, "imaging_type"],
     )
 
     artifacts = {

@@ -38,6 +38,7 @@ MANIFEST
 # Data & Datasets
 data/
 datasets/
+dataset/
 Bacteria dataset/
 test_data/
 reference_data/
