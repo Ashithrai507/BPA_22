@@ -404,10 +404,12 @@ def _split_colonies_by_image(
         raise ValueError("colony_table must be non-empty and contain an image_id column.")
 
     n_images = colony_table["image_id"].nunique()
-    if int(np.ceil(test_size * n_images)) == 0:
+    n_test_images = int(np.ceil(test_size * n_images))
+    n_train_images = n_images - n_test_images
+    if n_test_images == 0 or n_train_images == 0:
         raise ValueError(
-            f"Cannot build an image-level split: {n_images} images yield 0 test images "
-            f"for test_size={test_size}."
+            f"Cannot build an image-level split: {n_images} images yield "
+            f"{n_train_images} train / {n_test_images} test images for test_size={test_size}."
         )
 
     splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
