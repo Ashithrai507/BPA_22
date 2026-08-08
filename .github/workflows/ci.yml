@@ -39,8 +39,10 @@ jobs:
         id: cache-restore
         uses: actions/cache/restore@v4
         with:
-          path: artifacts/bacteria_models.joblib
-          key: bacteria-models-v1
+          path: |
+            artifacts/bacteria_models.joblib
+            artifacts/bacteria_models.metrics.json
+          key: bacteria-models-v2
           lookup-only: true
       - name: Download model artifact (release)
         if: steps.cache-restore.outputs.cache-hit != 'true'
@@ -54,5 +56,14 @@ jobs:
             echo "::error::Trained model artifact missing. Seed it from a machine with the dataset: make ci-upload-artifact (see CONTRIBUTING.md)."
             exit 1
           }
+          test -f artifacts/bacteria_models.metrics.json || {
+            echo "::error::Trained metrics artifact missing. Regenerate with make train and reseed with make ci-upload-artifact."
+            exit 1
+          }
       - name: Run tests
         run: python -m pytest -q
+      - name: Model quality gate
+        run: |
+          python scripts/evaluate_models.py \
+            --metrics artifacts/bacteria_models.metrics.json \
+            --min-fungi-recall 0.10
