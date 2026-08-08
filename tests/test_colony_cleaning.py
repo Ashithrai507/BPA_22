@@ -117,18 +117,22 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
         ignore_index=True,
     )
     monkeypatch.setattr(training, "_build_colony_feature_table", lambda labeled_df, workspace_root: colony_table)
-    monkeypatch.setattr(training, "_build_image_feature_table", lambda labeled_df, workspace_root: pd.DataFrame(
-        {
-            "image_path": ["img_a.png", "img_b.png"],
-            "organism": ["Staphylococcus aureus", "Staphylococcus aureus"],
-            "organism_type": ["bacteria", "bacteria"],
-            "gram_label": ["gram_positive", "gram_positive"],
-            "shape_label": ["cocci", "cocci"],
-            "taxonomy_group": ["gram_positive_cocci", "gram_positive_cocci"],
-            "imaging_type": ["gram", "gram"],
-            "r_mean": [0.5, 0.6],
-        }
-    ))
+    monkeypatch.setattr(
+        training,
+        "_build_image_feature_table",
+        lambda labeled_df, workspace_root: pd.DataFrame(
+            {
+                "image_path": ["img_a.png", "img_b.png"],
+                "organism": ["Staphylococcus aureus", "Staphylococcus aureus"],
+                "organism_type": ["bacteria", "bacteria"],
+                "gram_label": ["gram_positive", "gram_positive"],
+                "shape_label": ["cocci", "cocci"],
+                "taxonomy_group": ["gram_positive_cocci", "gram_positive_cocci"],
+                "imaging_type": ["gram", "gram"],
+                "r_mean": [0.5, 0.6],
+            }
+        ),
+    )
     monkeypatch.setattr(
         training,
         "_fit_best_ensemble_model",

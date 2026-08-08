@@ -505,9 +505,7 @@ def train_models(
 
     colony_table = _build_colony_feature_table(labeled_df, workspace_root)
     colony_table, colony_cleaning_stats = _clean_colony_label_table(colony_table)
-    colony_feature_cols = [
-        c for c in colony_table.columns if c not in {"shape_label", "imaging_type", "image_id"}
-    ]
+    colony_feature_cols = [c for c in colony_table.columns if c not in {"shape_label", "imaging_type", "image_id"}]
     if colony_table.empty:
         raise ValueError("Could not detect colonies in training images.")
 
