@@ -439,7 +439,9 @@ def _split_colonies_by_image(
 
 - [ ] **Step 5: Use the split for the shape model**
 
-In `src/bacteria_assistant/training.py`, replace the shape-model block (currently lines ~429-438):
+In `src/bacteria_assistant/training.py`, replace the shape-model block. NOTE: on this branch
+(main-derived) `_fit_best_ensemble_model` takes NO `test_modalities` argument — the "before"
+block below reflects the actual code:
 
 ```python
     xs = colony_table[colony_feature_cols]
@@ -459,7 +461,6 @@ In `src/bacteria_assistant/training.py`, replace the shape-model block (currentl
         xs_test,
         ys_test,
         random_state=random_state,
-        test_modalities=colony_table.loc[xs_test.index, "imaging_type"],
     )
 ```
 
@@ -484,7 +485,6 @@ with:
         xs_test,
         ys_test,
         random_state=random_state,
-        test_modalities=colony_table.loc[shape_test_idx, "imaging_type"],
     )
 ```
 
@@ -494,7 +494,7 @@ unused and ruff F841 flags unused locals). Keep `ys = colony_table["shape_label"
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `python -m pytest tests/test_colony_cleaning.py tests/test_training_quality.py -q`
+Run: `python -m pytest tests/test_colony_cleaning.py -q`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
