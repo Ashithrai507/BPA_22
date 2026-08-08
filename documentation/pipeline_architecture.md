@@ -85,6 +85,17 @@ This mapping drives:
 - `read_image()` uses `cv2.imdecode` to safely read paths with spaces/unicode
 - Fails fast if the image is unreadable
 
+### 3.2.1 Illumination normalization (CLAHE)
+- Grayscale is normalized with `cv2.createCLAHE()` (`clipLimit=2.0`, 8×8 tiles) in
+  both `extract_image_features()` and the colony segmentation path.
+- This removes the gram-stain vs media-plate brightness/contrast confounder
+  (issue #8); RGB/HSV color features are left on the original image.
+
+### 3.2.2 Photometric augmentation (training only)
+- `augment_image()` generates `AUGMENT_PER_IMAGE` (3) variants per training image:
+  brightness/contrast jitter + CLAHE-clip variants.
+- Applied to the training fold **only**; the test fold is never augmented.
+
 ### 3.3 Global image feature extraction (species‑level signal)
 Executed in `features.py`:
 
@@ -126,8 +137,10 @@ These feed the **shape model** and the advanced JSON output.
 ## 4) Training Pipeline (Hierarchical)
 
 ### 4.1 Training orchestration
-Implemented in `src/bacteria_assistant/training.py` using stratified train/test splits.
-All models share the same **image feature vector** unless otherwise stated.
+Implemented in `src/bacteria_assistant/training.py`. All image-level models share a
+**single image-level holdout** (stratified by organism); the training fold is
+photometrically augmented, the test fold is not. This keeps augmentation leakage-free
+and lets `per_modality_metrics` compare gram-stain vs media-plate accuracy.
 
 ### 4.2 Hierarchical model stack (image‑level)
 

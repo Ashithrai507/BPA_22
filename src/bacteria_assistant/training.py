@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -14,12 +15,30 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from .config import MODEL_PATH, ORGANISM_METADATA, normalize_organism_name
-from .features import colony_to_feature_dict, extract_colonies, extract_image_features, read_image
+from .config import (
+    AUGMENT_PER_IMAGE,
+    FEATURE_VERSION,
+    MODEL_PATH,
+    ORGANISM_METADATA,
+    normalize_organism_name,
+)
+from .features import (
+    augment_image,
+    colony_to_feature_dict,
+    extract_colonies,
+    extract_image_features,
+    read_image,
+)
 
 
 def _resolve_image_path(workspace_root: Path, image_path: str) -> Path:
     candidate = workspace_root / image_path
+    if candidate.exists():
+        return candidate
+
+    # CSVs may reference "Bacteria dataset/..." while images live under data/dataset/.
+    relocated = Path(str(image_path).replace("Bacteria dataset/", "data/dataset/"))
+    candidate = workspace_root / relocated
     if candidate.exists():
         return candidate
 
@@ -51,24 +70,40 @@ def _load_labeled_dataframe(dataset_csv: Path) -> pd.DataFrame:
     return labeled_df
 
 
-def _build_image_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) -> pd.DataFrame:
+def _build_image_feature_table(
+    labeled_df: pd.DataFrame,
+    workspace_root: Path,
+    augment: bool = False,
+) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for _, sample in labeled_df.iterrows():
         image_path = _resolve_image_path(workspace_root, str(sample["image_path"]))
         image = read_image(str(image_path))
-        f = extract_image_features(image)
-        f.update(
-            {
-                "image_path": str(image_path),
-                "organism": sample["organism"],
-                "organism_type": sample["organism_type"],
-                "gram_label": sample["gram_label"],
-                "shape_label": sample["shape_label"],
-                "taxonomy_group": sample["taxonomy_group"],
-                "imaging_type": sample["imaging_type"],
-            }
-        )
-        rows.append(f)
+
+        meta = {
+            "image_path": str(image_path),
+            "organism": sample["organism"],
+            "organism_type": sample["organism_type"],
+            "gram_label": sample["gram_label"],
+            "shape_label": sample["shape_label"],
+            "taxonomy_group": sample["taxonomy_group"],
+            "imaging_type": sample["imaging_type"],
+        }
+
+        if not augment:
+            f = extract_image_features(image)
+            f.update(meta)
+            rows.append(f)
+            continue
+
+        # Deterministic per-image seed so runs are reproducible.
+        seed = int(hashlib.md5(str(image_path).encode("utf-8")).hexdigest()[:8], 16)
+        variants = [image] + augment_image(image, seed)
+        for idx, variant in enumerate(variants):
+            f = extract_image_features(variant)
+            f.update(meta)
+            f["variant_id"] = idx
+            rows.append(f)
 
     return pd.DataFrame(rows)
 
@@ -162,6 +197,22 @@ _SCORING_METRICS = {
 }
 
 
+def _per_modality_metrics(test_table: pd.DataFrame, y_true_col: str, y_pred: list[str]) -> dict[str, Any]:
+    """Accuracy per imaging_type on the held-out test rows (issue #8)."""
+    table = test_table.reset_index(drop=True).copy()
+    table["_pred"] = list(y_pred)
+    result: dict[str, Any] = {}
+    for modality in sorted(table["imaging_type"].dropna().unique()):
+        sub = table[table["imaging_type"] == modality]
+        if len(sub) == 0:
+            continue
+        result[modality] = {
+            "accuracy": float(accuracy_score(sub[y_true_col], sub["_pred"])),
+            "n": int(len(sub)),
+        }
+    return result
+
+
 def _fit_best_ensemble_model(
     x_train: pd.DataFrame,
     y_train: pd.Series,
@@ -235,7 +286,8 @@ def _fit_best_ensemble_model(
 
 
 def _train_group_species_models(
-    image_table: pd.DataFrame,
+    train_table: pd.DataFrame,
+    test_table: pd.DataFrame,
     image_feature_cols: list[str],
     random_state: int,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
@@ -243,59 +295,39 @@ def _train_group_species_models(
     group_metrics: dict[str, Any] = {}
     group_model_choices: dict[str, str] = {}
 
-    for group_name in sorted(image_table["taxonomy_group"].unique()):
-        group_df = image_table[image_table["taxonomy_group"] == group_name].copy()
-        x_group = group_df[image_feature_cols]
-        y_group = group_df["organism"]
+    for group_name in sorted(train_table["taxonomy_group"].unique()):
+        train_group = train_table[train_table["taxonomy_group"] == group_name]
+        test_group = test_table[test_table["taxonomy_group"] == group_name]
+        x_train = train_group[image_feature_cols]
+        y_train = train_group["organism"]
+        x_test = test_group[image_feature_cols]
+        y_test = test_group["organism"]
 
-        if y_group.nunique() < 2:
+        if y_train.nunique() < 2:
             model = RandomForestClassifier(
                 n_estimators=300,
                 random_state=random_state,
                 class_weight="balanced_subsample",
                 n_jobs=-1,
             )
-            model.fit(x_group, y_group)
+            model.fit(x_train, y_train)
             group_models[group_name] = model
-            group_metrics[group_name] = {"accuracy": 1.0, "report": {}}
+            if len(y_test) == 0:
+                group_metrics[group_name] = {"accuracy": 1.0, "report": {}}
+            else:
+                pred = model.predict(x_test)
+                group_metrics[group_name] = _classification_summary(list(y_test), list(pred))
             group_model_choices[group_name] = "random_forest_single_class"
             continue
 
-        value_counts = y_group.value_counts()
-        can_stratify = int(value_counts.min()) >= 2
-
-        if can_stratify:
-            x_train, x_test, y_train, y_test = train_test_split(
-                x_group,
-                y_group,
-                test_size=0.2,
-                random_state=random_state,
-                stratify=y_group,
-            )
-            model, summary, model_name = _fit_best_ensemble_model(
-                x_train,
-                y_train,
-                x_test,
-                y_test,
-                random_state=random_state,
-                test_modalities=group_df.loc[x_test.index, "imaging_type"],
-            )
-        else:
-            x_train, x_test, y_train, y_test = train_test_split(
-                x_group,
-                y_group,
-                test_size=0.2,
-                random_state=random_state,
-            )
-            model, summary, model_name = _fit_best_ensemble_model(
-                x_train,
-                y_train,
-                x_test,
-                y_test,
-                random_state=random_state,
-                test_modalities=group_df.loc[x_test.index, "imaging_type"],
-            )
-
+        model, summary, model_name = _fit_best_ensemble_model(
+            x_train,
+            y_train,
+            x_test,
+            y_test,
+            random_state=random_state,
+            test_modalities=test_group["imaging_type"],
+        )
         group_models[group_name] = model
         group_metrics[group_name] = summary
         group_model_choices[group_name] = model_name
@@ -316,10 +348,23 @@ def train_models(
 
     labeled_df = _load_labeled_dataframe(dataset_csv)
 
-    image_table = _build_image_feature_table(labeled_df, workspace_root)
+    # Single image-level holdout shared by all image-level models. Augmentation is
+    # applied to the training fold only so it cannot leak into evaluation.
+    train_df, test_df = train_test_split(
+        labeled_df,
+        test_size=0.2,
+        random_state=random_state,
+        stratify=labeled_df["organism"],
+    )
+
+    train_table = _build_image_feature_table(train_df, workspace_root, augment=True)
+    test_table = _build_image_feature_table(test_df, workspace_root, augment=False)
+    if train_table.empty or test_table.empty:
+        raise ValueError("Image-level holdout produced an empty train/test split.")
+
     image_feature_cols = [
         c
-        for c in image_table.columns
+        for c in train_table.columns
         if c
         not in {
             "image_path",
@@ -329,94 +374,68 @@ def train_models(
             "shape_label",
             "taxonomy_group",
             "imaging_type",
+            "variant_id",
         }
     ]
 
-    gram_df = image_table[image_table["organism_type"] == "bacteria"].copy()
-    if gram_df.empty:
+    gram_train = train_table[train_table["organism_type"] == "bacteria"].copy()
+    gram_test = test_table[test_table["organism_type"] == "bacteria"].copy()
+    if gram_train.empty or gram_test.empty:
         raise ValueError("No bacterial rows found for Gram classifier training.")
 
-    xg = gram_df[image_feature_cols]
-    yg = gram_df["gram_label"]
-
-    xg_train, xg_test, yg_train, yg_test = train_test_split(
-        xg,
-        yg,
-        test_size=0.2,
-        random_state=random_state,
-        stratify=yg,
-    )
-
     gram_model, gram_summary, gram_model_name = _fit_best_ensemble_model(
-        xg_train,
-        yg_train,
-        xg_test,
-        yg_test,
+        gram_train[image_feature_cols],
+        gram_train["gram_label"],
+        gram_test[image_feature_cols],
+        gram_test["gram_label"],
         random_state=random_state,
-        test_modalities=image_table.loc[xg_test.index, "imaging_type"],
+        test_modalities=gram_test["imaging_type"],
     )
-
-    xt = image_table[image_feature_cols]
-    yt = image_table["organism_type"]
-    xt_train, xt_test, yt_train, yt_test = train_test_split(
-        xt,
-        yt,
-        test_size=0.2,
-        random_state=random_state,
-        stratify=yt,
+    gram_modality = _per_modality_metrics(
+        gram_test, "gram_label", list(gram_model.predict(gram_test[image_feature_cols]))
     )
 
     organism_type_model, organism_type_summary, organism_type_model_name = _fit_best_ensemble_model(
-        xt_train,
-        yt_train,
-        xt_test,
-        yt_test,
+        train_table[image_feature_cols],
+        train_table["organism_type"],
+        test_table[image_feature_cols],
+        test_table["organism_type"],
         random_state=random_state,
         scoring="balanced_accuracy",
-        test_modalities=image_table.loc[xt_test.index, "imaging_type"],
+        test_modalities=test_table["imaging_type"],
     )
-
-    xgroup = image_table[image_feature_cols]
-    ygroup = image_table["taxonomy_group"]
-    xgroup_train, xgroup_test, ygroup_train, ygroup_test = train_test_split(
-        xgroup,
-        ygroup,
-        test_size=0.2,
-        random_state=random_state,
-        stratify=ygroup,
+    organism_type_modality = _per_modality_metrics(
+        test_table,
+        "organism_type",
+        list(organism_type_model.predict(test_table[image_feature_cols])),
     )
 
     group_model, group_summary, group_model_name = _fit_best_ensemble_model(
-        xgroup_train,
-        ygroup_train,
-        xgroup_test,
-        ygroup_test,
+        train_table[image_feature_cols],
+        train_table["taxonomy_group"],
+        test_table[image_feature_cols],
+        test_table["taxonomy_group"],
         random_state=random_state,
-        test_modalities=image_table.loc[xgroup_test.index, "imaging_type"],
-    )
-
-    xo = image_table[image_feature_cols]
-    yo = image_table["organism"]
-
-    xo_train, xo_test, yo_train, yo_test = train_test_split(
-        xo,
-        yo,
-        test_size=0.2,
-        random_state=random_state,
-        stratify=yo,
+        test_modalities=test_table["imaging_type"],
     )
 
     organism_model, organism_summary, organism_model_name = _fit_best_ensemble_model(
-        xo_train,
-        yo_train,
-        xo_test,
-        yo_test,
+        train_table[image_feature_cols],
+        train_table["organism"],
+        test_table[image_feature_cols],
+        test_table["organism"],
         random_state=random_state,
-        test_modalities=image_table.loc[xo_test.index, "imaging_type"],
+        test_modalities=test_table["imaging_type"],
+    )
+    organism_modality = _per_modality_metrics(
+        test_table,
+        "organism",
+        list(organism_model.predict(test_table[image_feature_cols])),
     )
 
     group_species_models, group_species_metrics, group_species_model_choices = _train_group_species_models(
-        image_table,
+        train_table,
+        test_table,
         image_feature_cols,
         random_state=random_state,
     )
@@ -456,17 +475,23 @@ def train_models(
         "image_feature_columns": image_feature_cols,
         "colony_feature_columns": colony_feature_cols,
         "supported_shape_labels": sorted(set(ys)),
-        "supported_organisms": sorted(set(yo)),
+        "supported_organisms": sorted(set(train_table["organism"]).union(test_table["organism"])),
         "organism_metadata": ORGANISM_METADATA,
+        "feature_version": FEATURE_VERSION,
         "training_meta": {
             "dataset_csv": str(dataset_csv),
             "workspace_root": str(workspace_root),
             "labeled_image_count": int(len(labeled_df)),
-            "gram_train_samples": int(len(gram_df)),
-            "organism_type_train_samples": int(len(image_table)),
-            "group_train_samples": int(len(image_table)),
-            "organism_train_samples": int(len(image_table)),
+            "train_image_count": int(len(train_df)),
+            "test_image_count": int(len(test_df)),
+            "augmented_train_rows": int(len(train_table)),
+            "augment_per_image": int(AUGMENT_PER_IMAGE),
+            "gram_train_samples": int(len(gram_train)),
+            "organism_type_train_samples": int(len(train_table)),
+            "group_train_samples": int(len(train_table)),
+            "organism_train_samples": int(len(train_table)),
             "colony_train_samples": int(len(colony_table)),
+            "feature_version": FEATURE_VERSION,
         },
         "model_choices": {
             "gram_model": gram_model_name,
@@ -487,6 +512,11 @@ def train_models(
         "group_species_metrics": group_species_metrics,
         "organism_metrics": organism_summary,
         "shape_metrics": shape_summary,
+        "per_modality_metrics": {
+            "organism_type_model": organism_type_modality,
+            "organism_model": organism_modality,
+            "gram_model": gram_modality,
+        },
         "model_path": str(model_output_path),
         "training_meta": artifacts["training_meta"],
         "model_choices": artifacts["model_choices"],

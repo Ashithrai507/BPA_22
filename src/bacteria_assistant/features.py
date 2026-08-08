@@ -6,6 +6,40 @@ from typing import Any
 import cv2
 import numpy as np
 
+from .config import (
+    AUGMENT_BRIGHTNESS_SIGMA,
+    AUGMENT_CLAHE_CLIP_RANGE,
+    AUGMENT_CONTRAST_ALPHA,
+    AUGMENT_PER_IMAGE,
+    CLAHE_CLIP_LIMIT,
+    CLAHE_TILE_GRID,
+)
+
+
+def _apply_clahe(gray: np.ndarray) -> np.ndarray:
+    clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=(CLAHE_TILE_GRID, CLAHE_TILE_GRID))
+    return clahe.apply(gray)
+
+
+def augment_image(image: np.ndarray, seed: int) -> list[np.ndarray]:
+    rng = np.random.default_rng(seed)
+    variants: list[np.ndarray] = []
+    for _ in range(AUGMENT_PER_IMAGE):
+        variant = image.copy().astype(np.float32)
+
+        alpha = rng.uniform(*AUGMENT_CONTRAST_ALPHA)
+        beta = rng.normal(0.0, AUGMENT_BRIGHTNESS_SIGMA)
+        variant = np.clip(variant * alpha + beta, 0, 255).astype(np.uint8)
+
+        clip = rng.uniform(*AUGMENT_CLAHE_CLIP_RANGE)
+        lab = cv2.cvtColor(variant, cv2.COLOR_BGR2LAB)
+        tile = (CLAHE_TILE_GRID, CLAHE_TILE_GRID)
+        lab[:, :, 0] = cv2.createCLAHE(clipLimit=clip, tileGridSize=tile).apply(lab[:, :, 0])
+        variant = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+        variants.append(variant)
+    return variants
+
 
 @dataclass
 class ColonyMeasurement:
@@ -33,7 +67,7 @@ def extract_image_features(image: np.ndarray) -> dict[str, float]:
     image = cv2.resize(image, (256, 256), interpolation=cv2.INTER_AREA)
     rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = _apply_clahe(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
 
     features: dict[str, float] = {}
 
@@ -153,7 +187,7 @@ def _contour_to_measurement(contour: np.ndarray, gray: np.ndarray) -> ColonyMeas
 
 
 def extract_colonies(image: np.ndarray) -> list[ColonyMeasurement]:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = _apply_clahe(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
     contours = _choose_best_mask(gray)
     colonies = [_contour_to_measurement(contour, gray) for contour in contours]
     colonies.sort(key=lambda c: c.area, reverse=True)
