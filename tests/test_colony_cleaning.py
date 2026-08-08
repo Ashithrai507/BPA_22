@@ -75,8 +75,15 @@ def test_clean_colony_label_table_does_not_mutate_input() -> None:
 
 
 def test_clean_colony_label_table_empty_frame() -> None:
-    cleaned, stats = training._clean_colony_label_table(pd.DataFrame(columns=["shape_label", "aspect_ratio", "solidity"]))
+    empty = pd.DataFrame(columns=["shape_label", "aspect_ratio", "solidity"])
+    cleaned, stats = training._clean_colony_label_table(empty)
 
     assert cleaned.empty
     assert stats["colony_rows_before_cleaning"] == 0
     assert stats["colony_rows_removed_by_cleaning"] == 0
+    assert stats["colony_cleaning_removals"] == {
+        "cocci": 0,
+        "bacilli": 0,
+        "spiral": 0,
+        "fungal": 0,
+    }
