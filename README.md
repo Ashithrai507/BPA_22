@@ -62,13 +62,17 @@ Core dependencies: `numpy`, `pandas`, `scikit-learn`, `opencv-python-headless`,
 ### 1. Train the model bundle
 
 ```bash
+make train
+# or
 python scripts/train_model.py
 ```
 
 Artifacts written to:
 
 - `artifacts/bacteria_models.joblib` — serialized model bundle
-- `artifacts/bacteria_models.metrics.json` — per-model evaluation metrics
+- `artifacts/bacteria_models.metrics.json` — per-model evaluation metrics, including
+  `per_modality_metrics` (gram-stain vs media-plate held-out accuracy) and
+  `training_meta.feature_version`
 
 > The bundled artifact was produced in a different workspace. Retrain locally to
 > refresh feature paths and metrics.
@@ -194,7 +198,11 @@ gates, all label fields are returned as `unknown` (colony counts are still repor
 
 - **Global image features (616-dim)** — per image: RGB/HSV/grayscale mean & std,
   Laplacian variance (sharpness), Canny edge density, 8-bin RGB color histograms, and a
-  24×24 spatial grayscale signature encoding colony layout.
+  24×24 spatial grayscale signature encoding colony layout. The grayscale is
+  **CLAHE-normalized** (`clipLimit=2.0`) before the spatial/edge/Laplacian features are
+  computed to remove the gram-stain vs media-plate illumination confounder.
+- **Photometric augmentation** — training images are augmented with brightness/contrast
+  jitter and CLAHE-clip variants (train fold only) so models stop keying on lighting.
 - **Colony features (7-dim)** — per segmented colony: area, perimeter, circularity
   (`4πA/P²`), aspect ratio, solidity, equivalent diameter, mean intensity.
 
@@ -235,8 +243,8 @@ BPA_22/
 │   └── run_protein_pipeline.py    # Phase 2: species -> protein sequence
 ├── src/
 │   ├── bacteria_assistant/        # Phase 1: CV/ML pipeline
-│   │   ├── config.py              # taxonomy, thresholds, paths
-│   │   ├── features.py            # image + colony feature extraction
+│   │   ├── config.py              # taxonomy, thresholds, paths, feature version
+│   │   ├── features.py            # image + colony feature extraction, CLAHE, augmentation
 │   │   ├── training.py            # hierarchical training pipeline
 │   │   └── inference.py           # prediction + output assembly
 │   └── protein_engine/            # Phase 2: protein retrieval engine
@@ -246,11 +254,13 @@ BPA_22/
 │       └── sequence/              # validation + FASTA/JSON export
 ├── morphology/                    # standalone prototype pipeline (research)
 ├── tests/
-│   └── test_output_contract.py    # JSON output contract tests
+│   ├── test_output_contract.py    # JSON output contract tests
+│   └── test_modality_fix.py       # modality-confounder unit tests
 ├── data/                          # dataset + test images (not in git)
 ├── reference_data/                # curated ranking DBs (not in git)
 ├── output/                        # pipeline runtime outputs (not in git)
 ├── artifacts/                     # trained model bundle + metrics (not in git)
+
 ├── documentation/                 # architecture & workflow deep-dives
 ├── Makefile                       # dev workflow targets (setup/train/test/lint/...)
 ├── pyproject.toml                 # packaging, pytest, ruff config

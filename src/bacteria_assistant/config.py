@@ -114,5 +114,19 @@ ARTIFACT_DIR = _env_path("BACTERIA_ARTIFACT_DIR", "artifacts")
 MODEL_PATH = _env_path("BACTERIA_MODEL_PATH", str(ARTIFACT_DIR / "bacteria_models.joblib"))
 
 
+# Bump whenever feature extraction changes; forces model artifact refresh.
+FEATURE_VERSION = 2
+
+# CLAHE illumination normalization (issue #8 - imaging modality confounder).
+CLAHE_CLIP_LIMIT = 2.0
+CLAHE_TILE_GRID = 8
+
+# Photometric augmentation (training fold only).
+AUGMENT_PER_IMAGE = 3
+AUGMENT_BRIGHTNESS_SIGMA = 12.0
+AUGMENT_CONTRAST_ALPHA = (0.85, 1.15)
+AUGMENT_CLAHE_CLIP_RANGE = (1.0, 3.0)
+
+
 def normalize_organism_name(name: str) -> str:
     return " ".join(str(name).replace("_", " ").split()).strip()
