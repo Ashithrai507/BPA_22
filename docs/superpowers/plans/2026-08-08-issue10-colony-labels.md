@@ -19,6 +19,18 @@
 
 ---
 
+## Integration Note (added during execution)
+
+**Updated 2026-08-08:** While Tasks 1-4 were in flight, `fix/issue-7-fungi-recall` was merged into `main` (`917e0b4`), advancing `main` past this branch's merge-base (`55cd082`). Main now contains issue-7's training changes: `_build_colony_feature_table` also emits `imaging_type`; `_fit_best_ensemble_model` gained `scoring`, `test_modalities`, `candidates` args and `_oversample_train`; the shape model is trained with `scoring="balanced_accuracy"` and `test_modalities`; `scripts/evaluate_models.py` and `tests/test_training_quality.py` now exist on main; CI gained a `--min-fungi-recall 0.10` quality gate (cache key `bacteria-models-v2`).
+
+Consequences for this branch:
+- The PR is CONFLICTING; `src/bacteria_assistant/training.py` must be merged with main's version (both branches edited it).
+- The merged `colony_feature_cols` exclusion set must be `{"shape_label", "imaging_type", "image_id"}`.
+- The merged shape-model block must keep our cleaning + `_split_colonies_by_image` AND pass `scoring="balanced_accuracy"` and `test_modalities=colony_table.loc[xs_test.index, "imaging_type"]` (matching main's other model calls).
+- After merging, re-run lint + full test suite, retrain, re-evaluate (evaluate_models.py now exists on main), re-upload the artifact, and force-update the PR. Acceptance for the merged retrain: CI gates pass (fungi recall >= 0.10) AND shape accuracy >= 0.72 with cocci/fungal recall above the issue-10 baseline (cocci 0.35, fungal 0.13).
+
+---
+
 ### Task 1: Config thresholds and cleaning filter with unit tests
 
 **Files:**
