@@ -111,11 +111,18 @@ def test_clean_colony_label_table_does_not_mutate_input() -> None:
 
 
 def test_clean_colony_label_table_empty_frame() -> None:
-    cleaned, stats = training._clean_colony_label_table(pd.DataFrame(columns=["shape_label", "aspect_ratio", "solidity"]))
+    empty = pd.DataFrame(columns=["shape_label", "aspect_ratio", "solidity"])
+    cleaned, stats = training._clean_colony_label_table(empty)
 
     assert cleaned.empty
     assert stats["colony_rows_before_cleaning"] == 0
     assert stats["colony_rows_removed_by_cleaning"] == 0
+    assert stats["colony_cleaning_removals"] == {
+        "cocci": 0,
+        "bacilli": 0,
+        "spiral": 0,
+        "fungal": 0,
+    }
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -208,7 +215,9 @@ git commit -m "feat(training): clean colony rows contradicting shape label"
 
 - [ ] **Step 1: Write the failing test**
 
-In `tests/test_training_quality.py`, append:
+In `tests/test_colony_cleaning.py`, append (note: the dummy model must be a picklable
+sklearn object because `train_models` runs `joblib.dump` on the artifacts dict — do NOT
+use a local/custom class here):
 
 ```python
 def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> None:
@@ -249,7 +258,7 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
             "r_mean": [0.5, 0.6],
         }
     ))
-    monkeypatch.setattr(training, "_fit_best_ensemble_model", lambda *a, **k: (_ConstantPredictor(), {"accuracy": 1.0}, "constant"))
+    monkeypatch.setattr(training, "_fit_best_ensemble_model", lambda *a, **k: (RandomForestClassifier(), {"accuracy": 1.0}, "constant"))
 
     metrics = training.train_models(
         dataset_csv=csv_path,
@@ -264,13 +273,18 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
     assert meta["colony_cleaning_removals"]["cocci"] == 5
     assert meta["colony_cleaning_removals"]["bacilli"] == 5
     assert meta["colony_cleaning_removals"]["fungal"] == 5
+    assert meta["colony_cleaning_removals"]["spiral"] == 0
 ```
 
-Note: `_ConstantPredictor` is already defined at the top of `test_training_quality.py`. Import `training` and `pandas` at the top of `tests/test_training_quality.py` (they are already imported there).
+Note: add `from sklearn.ensemble import RandomForestClassifier` to the imports in
+`tests/test_colony_cleaning.py`. Import `training` (already imported) and `pandas` (already
+imported) are available. This test lives in `tests/test_colony_cleaning.py` because
+`tests/test_training_quality.py` does not exist on this branch (it is part of the unmerged
+issue #7 PR).
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `python -m pytest tests/test_training_quality.py::test_train_models_records_colony_cleaning_meta -q`
+Run: `python -m pytest tests/test_colony_cleaning.py::test_train_models_records_colony_cleaning_meta -q`
 Expected: FAIL with `KeyError: 'colony_rows_before_cleaning'`
 
 - [ ] **Step 3: Modify train_models**
@@ -302,13 +316,13 @@ In the `training_meta` dict (currently lines ~461-470), add:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python -m pytest tests/test_training_quality.py -q`
+Run: `python -m pytest tests/test_colony_cleaning.py -q`
 Expected: PASS (all, including the new one)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/bacteria_assistant/training.py tests/test_training_quality.py
+git add src/bacteria_assistant/training.py tests/test_colony_cleaning.py
 git commit -m "feat(training): record colony cleaning removals in training_meta"
 ```
 
