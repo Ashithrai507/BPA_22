@@ -371,9 +371,9 @@ def train_models(
 
     colony_feature_cols = [c for c in colony_train.columns if c not in {"shape_label", "image_path"}]
 
-    assert set(colony_train["image_path"]).isdisjoint(set(colony_test["image_path"])), (
-        "Image-level split violated: the same image appears in both train and test colony tables."
-    )
+    assert set(colony_train["image_path"]).isdisjoint(
+        set(colony_test["image_path"])
+    ), "Image-level split violated: the same image appears in both train and test colony tables."
 
     xs_train = colony_train[colony_feature_cols]
     ys_train = colony_train["shape_label"]
