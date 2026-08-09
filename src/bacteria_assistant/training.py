@@ -85,6 +85,7 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
         image_shape_label = str(sample["shape_label"])
         for colony in colonies:
             features = colony_to_feature_dict(colony)
+            features["image_path"] = str(image_path)
             features["shape_label"] = image_shape_label
             rows.append(features)
 
@@ -356,21 +357,28 @@ def train_models(
         random_state=random_state,
     )
 
-    colony_table = _build_colony_feature_table(labeled_df, workspace_root)
-    colony_feature_cols = [c for c in colony_table.columns if c != "shape_label"]
-    if colony_table.empty:
-        raise ValueError("Could not detect colonies in training images.")
-
-    xs = colony_table[colony_feature_cols]
-    ys = colony_table["shape_label"]
-
-    xs_train, xs_test, ys_train, ys_test = train_test_split(
-        xs,
-        ys,
+    labeled_train_df, labeled_test_df = _image_level_split(
+        labeled_df,
         test_size=0.2,
         random_state=random_state,
-        stratify=ys,
     )
+
+    colony_train = _build_colony_feature_table(labeled_train_df, workspace_root)
+    colony_test = _build_colony_feature_table(labeled_test_df, workspace_root)
+
+    if colony_train.empty or colony_test.empty:
+        raise ValueError("Could not detect colonies in training images.")
+
+    colony_feature_cols = [c for c in colony_train.columns if c not in {"shape_label", "image_path"}]
+
+    assert set(colony_train["image_path"]).isdisjoint(set(colony_test["image_path"])), (
+        "Image-level split violated: the same image appears in both train and test colony tables."
+    )
+
+    xs_train = colony_train[colony_feature_cols]
+    ys_train = colony_train["shape_label"]
+    xs_test = colony_test[colony_feature_cols]
+    ys_test = colony_test["shape_label"]
 
     shape_model, shape_summary, shape_model_name = _fit_best_ensemble_model(
         xs_train,
@@ -389,7 +397,7 @@ def train_models(
         "shape_model": shape_model,
         "image_feature_columns": image_feature_cols,
         "colony_feature_columns": colony_feature_cols,
-        "supported_shape_labels": sorted(set(ys)),
+        "supported_shape_labels": sorted(set(ys_train) | set(ys_test)),
         "supported_organisms": sorted(set(yo)),
         "organism_metadata": ORGANISM_METADATA,
         "training_meta": {
@@ -400,7 +408,8 @@ def train_models(
             "organism_type_train_samples": int(len(image_table)),
             "group_train_samples": int(len(image_table)),
             "organism_train_samples": int(len(image_table)),
-            "colony_train_samples": int(len(colony_table)),
+            "colony_train_samples": int(len(colony_train) + len(colony_test)),
+            "shape_split_strategy": "image_level",
         },
         "model_choices": {
             "gram_model": gram_model_name,
