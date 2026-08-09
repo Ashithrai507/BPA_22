@@ -131,6 +131,26 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
     return pd.DataFrame(rows)
 
 
+def _image_level_split(
+    labeled_df: pd.DataFrame,
+    test_size: float = 0.2,
+    random_state: int = 42,
+    stratify_col: str = "shape_label",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split images (not colonies) into train/test with no image overlap.
+
+    Colonies are expanded later, so splitting here guarantees no single
+    image's colonies appear in both the training and test sets.
+    """
+    y = labeled_df[stratify_col]
+    split_kwargs: dict[str, Any] = {"test_size": test_size, "random_state": random_state}
+    if int(y.value_counts().min()) >= 2:
+        split_kwargs["stratify"] = y
+
+    train_idx, test_idx = train_test_split(labeled_df.index, **split_kwargs)
+    return labeled_df.loc[train_idx], labeled_df.loc[test_idx]
+
+
 def _clean_colony_label_table(colony_table: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
     """Drop colony rows whose geometry contradicts their shape_label (issue #10).
 
@@ -503,23 +523,32 @@ def train_models(
         random_state=random_state,
     )
 
-    colony_table = _build_colony_feature_table(labeled_df, workspace_root)
-    colony_table, colony_cleaning_stats = _clean_colony_label_table(colony_table)
-    colony_feature_cols = [c for c in colony_table.columns if c not in {"shape_label", "imaging_type", "image_id"}]
-    if colony_table.empty:
-        raise ValueError("Could not detect colonies in training images.")
+    colony_table_full = _build_colony_feature_table(labeled_df, workspace_root)
+    colony_table_cleaned, colony_cleaning_stats = _clean_colony_label_table(colony_table_full)
 
-    ys = colony_table["shape_label"]
-
-    shape_train_idx, shape_test_idx = _split_colonies_by_image(
-        colony_table,
+    labeled_train_df, labeled_test_df = _image_level_split(
+        labeled_df,
         test_size=0.2,
         random_state=random_state,
     )
-    xs_train = colony_table.loc[shape_train_idx, colony_feature_cols]
-    ys_train = colony_table.loc[shape_train_idx, "shape_label"]
-    xs_test = colony_table.loc[shape_test_idx, colony_feature_cols]
-    ys_test = colony_table.loc[shape_test_idx, "shape_label"]
+    colony_train = _build_colony_feature_table(labeled_train_df, workspace_root)
+    colony_test = _build_colony_feature_table(labeled_test_df, workspace_root)
+    colony_train, _ = _clean_colony_label_table(colony_train)
+    colony_test, _ = _clean_colony_label_table(colony_test)
+
+    if colony_train.empty or colony_test.empty:
+        raise ValueError("Could not detect colonies in training images.")
+
+    colony_feature_cols = [c for c in colony_train.columns if c not in {"shape_label", "imaging_type", "image_id"}]
+
+    assert set(labeled_train_df["image_path"]).isdisjoint(
+        set(labeled_test_df["image_path"])
+    ), "Image-level split violated: the same image appears in both train and test splits."
+
+    xs_train = colony_train[colony_feature_cols]
+    ys_train = colony_train["shape_label"]
+    xs_test = colony_test[colony_feature_cols]
+    ys_test = colony_test["shape_label"]
 
     shape_model, shape_summary, shape_model_name = _fit_best_ensemble_model(
         xs_train,
@@ -527,7 +556,7 @@ def train_models(
         xs_test,
         ys_test,
         random_state=random_state,
-        test_modalities=colony_table.loc[xs_test.index, "imaging_type"],
+        test_modalities=colony_test["imaging_type"],
     )
 
     artifacts = {
@@ -539,7 +568,7 @@ def train_models(
         "shape_model": shape_model,
         "image_feature_columns": image_feature_cols,
         "colony_feature_columns": colony_feature_cols,
-        "supported_shape_labels": sorted(set(ys)),
+        "supported_shape_labels": sorted(set(colony_table_cleaned["shape_label"])),
         "supported_organisms": sorted(set(train_table["organism"]).union(test_table["organism"])),
         "organism_metadata": ORGANISM_METADATA,
         "feature_version": FEATURE_VERSION,
@@ -547,15 +576,17 @@ def train_models(
             "dataset_csv": str(dataset_csv),
             "workspace_root": str(workspace_root),
             "labeled_image_count": int(len(labeled_df)),
-            "train_image_count": int(len(train_df)),
-            "test_image_count": int(len(test_df)),
+            "train_image_count": int(len(labeled_train_df)),
+            "test_image_count": int(len(labeled_test_df)),
             "augmented_train_rows": int(len(train_table)),
             "augment_per_image": int(AUGMENT_PER_IMAGE),
             "gram_train_samples": int(len(gram_train)),
             "organism_type_train_samples": int(len(train_table)),
             "group_train_samples": int(len(train_table)),
             "organism_train_samples": int(len(train_table)),
-            "colony_train_samples": int(len(colony_table)),
+            "colony_train_samples": int(len(colony_train)),
+            "colony_test_samples": int(len(colony_test)),
+            "shape_split_strategy": "image_level",
             "colony_rows_before_cleaning": int(colony_cleaning_stats["colony_rows_before_cleaning"]),
             "colony_rows_removed_by_cleaning": int(colony_cleaning_stats["colony_rows_removed_by_cleaning"]),
             "colony_cleaning_removals": dict(colony_cleaning_stats["colony_cleaning_removals"]),
