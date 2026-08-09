@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -20,6 +20,8 @@ from .config import (
     FEATURE_VERSION,
     MODEL_PATH,
     ORGANISM_METADATA,
+    SHAPE_CLEANING_RULES,
+    SUPPORTED_SHAPES,
     normalize_organism_name,
 )
 from .features import (
@@ -122,10 +124,71 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
         for colony in colonies:
             features = colony_to_feature_dict(colony)
             features["shape_label"] = image_shape_label
+            features["image_id"] = str(image_path)
             features["imaging_type"] = sample["imaging_type"]
             rows.append(features)
 
     return pd.DataFrame(rows)
+
+
+def _clean_colony_label_table(colony_table: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Drop colony rows whose geometry contradicts their shape_label (issue #10).
+
+    Returns the cleaned table and removal statistics for `training_meta`.
+    Removal counts are emitted for every supported shape so the audit trail is
+    complete (shapes without a rule always report 0).
+    """
+    removals: dict[str, int] = {shape: 0 for shape in SUPPORTED_SHAPES}
+    if colony_table.empty:
+        stats = {
+            "colony_rows_before_cleaning": 0,
+            "colony_rows_removed_by_cleaning": 0,
+            "colony_cleaning_removals": removals,
+        }
+        return colony_table.copy(), stats
+
+    keep = pd.Series(True, index=colony_table.index)
+    for shape_label, rules in SHAPE_CLEANING_RULES.items():
+        contradict = colony_table["shape_label"] == shape_label
+        if "max_aspect_ratio" in rules:
+            contradict &= colony_table["aspect_ratio"] > rules["max_aspect_ratio"]
+        if "min_aspect_ratio" in rules:
+            contradict &= colony_table["aspect_ratio"] < rules["min_aspect_ratio"]
+        if "max_solidity" in rules:
+            contradict &= colony_table["solidity"] > rules["max_solidity"]
+        removals[shape_label] = int(contradict.sum())
+        keep &= ~contradict
+
+    cleaned = colony_table.loc[keep].copy()
+    stats = {
+        "colony_rows_before_cleaning": int(len(colony_table)),
+        "colony_rows_removed_by_cleaning": int((~keep).sum()),
+        "colony_cleaning_removals": removals,
+    }
+    return cleaned, stats
+
+
+def _split_colonies_by_image(
+    colony_table: pd.DataFrame,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> tuple[pd.Index, pd.Index]:
+    """Split colony rows by image so no plate leaks between train and test (issue #6)."""
+    if colony_table.empty or "image_id" not in colony_table.columns:
+        raise ValueError("colony_table must be non-empty and contain an image_id column.")
+
+    n_images = colony_table["image_id"].nunique()
+    n_test_images = int(np.ceil(test_size * n_images))
+    n_train_images = n_images - n_test_images
+    if n_test_images == 0 or n_train_images == 0:
+        raise ValueError(
+            f"Cannot build an image-level split: {n_images} images yield "
+            f"{n_train_images} train / {n_test_images} test images for test_size={test_size}."
+        )
+
+    splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+    train_pos, test_pos = next(splitter.split(colony_table, groups=colony_table["image_id"].to_numpy()))
+    return colony_table.index[train_pos], colony_table.index[test_pos]
 
 
 def _classification_summary(
@@ -441,20 +504,22 @@ def train_models(
     )
 
     colony_table = _build_colony_feature_table(labeled_df, workspace_root)
-    colony_feature_cols = [c for c in colony_table.columns if c not in {"shape_label", "imaging_type"}]
+    colony_table, colony_cleaning_stats = _clean_colony_label_table(colony_table)
+    colony_feature_cols = [c for c in colony_table.columns if c not in {"shape_label", "imaging_type", "image_id"}]
     if colony_table.empty:
         raise ValueError("Could not detect colonies in training images.")
 
-    xs = colony_table[colony_feature_cols]
     ys = colony_table["shape_label"]
 
-    xs_train, xs_test, ys_train, ys_test = train_test_split(
-        xs,
-        ys,
+    shape_train_idx, shape_test_idx = _split_colonies_by_image(
+        colony_table,
         test_size=0.2,
         random_state=random_state,
-        stratify=ys,
     )
+    xs_train = colony_table.loc[shape_train_idx, colony_feature_cols]
+    ys_train = colony_table.loc[shape_train_idx, "shape_label"]
+    xs_test = colony_table.loc[shape_test_idx, colony_feature_cols]
+    ys_test = colony_table.loc[shape_test_idx, "shape_label"]
 
     shape_model, shape_summary, shape_model_name = _fit_best_ensemble_model(
         xs_train,
@@ -491,6 +556,9 @@ def train_models(
             "group_train_samples": int(len(train_table)),
             "organism_train_samples": int(len(train_table)),
             "colony_train_samples": int(len(colony_table)),
+            "colony_rows_before_cleaning": int(colony_cleaning_stats["colony_rows_before_cleaning"]),
+            "colony_rows_removed_by_cleaning": int(colony_cleaning_stats["colony_rows_removed_by_cleaning"]),
+            "colony_cleaning_removals": dict(colony_cleaning_stats["colony_cleaning_removals"]),
             "feature_version": FEATURE_VERSION,
         },
         "model_choices": {
