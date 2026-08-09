@@ -91,6 +91,26 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
     return pd.DataFrame(rows)
 
 
+def _image_level_split(
+    labeled_df: pd.DataFrame,
+    test_size: float = 0.2,
+    random_state: int = 42,
+    stratify_col: str = "shape_label",
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Split images (not colonies) into train/test with no image overlap.
+
+    Colonies are expanded later, so splitting here guarantees no single
+    image's colonies appear in both the training and test sets.
+    """
+    y = labeled_df[stratify_col]
+    split_kwargs: dict[str, Any] = {"test_size": test_size, "random_state": random_state}
+    if int(y.value_counts().min()) >= 2:
+        split_kwargs["stratify"] = y
+
+    train_idx, test_idx = train_test_split(labeled_df.index, **split_kwargs)
+    return labeled_df.loc[train_idx], labeled_df.loc[test_idx]
+
+
 def _classification_summary(y_true: list[str], y_pred: list[str]) -> dict[str, Any]:
     report = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
     return {
