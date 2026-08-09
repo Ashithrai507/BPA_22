@@ -22,12 +22,12 @@ def _model_path() -> Path:
 
 
 def _first_image() -> Path:
-    dataset_root = PROJECT_ROOT / DATASET_ROOT
-    if not dataset_root.exists():
-        pytest.skip(f"Dataset root not found at {dataset_root}. See CONTRIBUTING.md.")
-    for path in dataset_root.rglob("*.png"):
-        return path
-    raise FileNotFoundError("No PNG image found in dataset.")
+    dataset_roots = [PROJECT_ROOT / DATASET_ROOT, PROJECT_ROOT / "Bacteria dataset"]
+    for dataset_root in dataset_roots:
+        if dataset_root.exists():
+            for path in dataset_root.rglob("*.png"):
+                return path
+    pytest.skip(f"Dataset root not found in {dataset_roots}. See CONTRIBUTING.md.")
 
 
 def test_basic_output_contract() -> None:

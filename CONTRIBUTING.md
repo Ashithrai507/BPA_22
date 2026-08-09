@@ -92,6 +92,9 @@ has the dataset:
 make ci-upload-artifact   # requires gh auth + dataset present
 ```
 
+The seeded release ships both `artifacts/bacteria_models.joblib` and the
+`artifacts/bacteria_models.metrics.json` that CI's model-quality gate reads.
+
 If the artifact is missing entirely, CI fails with a clear message (it never
 silently skips tests).
 

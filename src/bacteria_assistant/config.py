@@ -80,6 +80,16 @@ SUPPORTED_SHAPES = ("cocci", "bacilli", "spiral", "fungal")
 
 UNKNOWN_LABEL = "unknown"
 
+# Heuristic cleaning for colony shape training labels (issue #10).
+# A colony row is dropped when its geometry strongly contradicts the parent
+# image's shape_label. Thresholds are deliberately conservative; tune with
+# `make evaluate` on the shape model.
+SHAPE_CLEANING_RULES = {
+    "cocci": {"max_aspect_ratio": 2.0},
+    "bacilli": {"min_aspect_ratio": 1.2},
+    "fungal": {"max_solidity": 0.95},
+}
+
 # Rejection thresholds to flag out-of-distribution images.
 MIN_ORGANISM_CONFIDENCE = 0.55
 MIN_COLONY_CONFIDENCE = 0.45
@@ -112,6 +122,20 @@ ORGANISMS_BY_GROUP = {
 DATASET_ROOT = _env_path("BACTERIA_DATASET_ROOT", "data/dataset")
 ARTIFACT_DIR = _env_path("BACTERIA_ARTIFACT_DIR", "artifacts")
 MODEL_PATH = _env_path("BACTERIA_MODEL_PATH", str(ARTIFACT_DIR / "bacteria_models.joblib"))
+
+
+# Bump whenever feature extraction changes; forces model artifact refresh.
+FEATURE_VERSION = 2
+
+# CLAHE illumination normalization (issue #8 - imaging modality confounder).
+CLAHE_CLIP_LIMIT = 2.0
+CLAHE_TILE_GRID = 8
+
+# Photometric augmentation (training fold only).
+AUGMENT_PER_IMAGE = 3
+AUGMENT_BRIGHTNESS_SIGMA = 12.0
+AUGMENT_CONTRAST_ALPHA = (0.85, 1.15)
+AUGMENT_CLAHE_CLIP_RANGE = (1.0, 3.0)
 
 
 def normalize_organism_name(name: str) -> str:

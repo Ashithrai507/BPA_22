@@ -5,7 +5,7 @@ PIP = $(VENV_PYTHON) -m pip
 PYTEST = $(VENV_PYTHON) -m pytest
 RUFF = $(VENV_PYTHON) -m ruff
 
-.PHONY: help setup install train test lint format run-ui ci-upload-artifact clean
+.PHONY: help setup install train evaluate test lint format run-ui ci-upload-artifact clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -23,6 +23,9 @@ install: ## Install dependencies into the active environment
 train: ## Train the model bundle (requires data/dataset present)
 	$(VENV_PYTHON) scripts/train_model.py
 
+evaluate: ## Print model quality report from the trained artifact's metrics
+	$(VENV_PYTHON) scripts/evaluate_models.py
+
 test: ## Run the test suite
 	$(PYTEST) -q
 
@@ -38,7 +41,7 @@ run-ui: ## Launch the desktop UI
 
 ci-upload-artifact: ## Upload the trained artifact so CI can run full tests (needs dataset + gh auth)
 	gh release view model-artifact >/dev/null 2>&1 || gh release create model-artifact --title "Trained model artifact" --notes "Seeded for CI. Regenerate with 'make train'."
-	gh release upload model-artifact artifacts/bacteria_models.joblib --clobber
+	gh release upload model-artifact artifacts/bacteria_models.joblib artifacts/bacteria_models.metrics.json --clobber
 
 clean: ## Remove build and cache artifacts
 	rm -rf .pytest_cache .ruff_cache .mypy_cache
