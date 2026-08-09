@@ -123,7 +123,6 @@ def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) 
         image_shape_label = str(sample["shape_label"])
         for colony in colonies:
             features = colony_to_feature_dict(colony)
-            features["image_path"] = str(image_path)
             features["shape_label"] = image_shape_label
             features["image_id"] = str(image_path)
             features["imaging_type"] = sample["imaging_type"]
@@ -585,7 +584,8 @@ def train_models(
             "organism_type_train_samples": int(len(train_table)),
             "group_train_samples": int(len(train_table)),
             "organism_train_samples": int(len(train_table)),
-            "colony_train_samples": int(len(colony_table_cleaned)),
+            "colony_train_samples": int(len(colony_train)),
+            "colony_test_samples": int(len(colony_test)),
             "shape_split_strategy": "image_level",
             "colony_rows_before_cleaning": int(colony_cleaning_stats["colony_rows_before_cleaning"]),
             "colony_rows_removed_by_cleaning": int(colony_cleaning_stats["colony_rows_removed_by_cleaning"]),
