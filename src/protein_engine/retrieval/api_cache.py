@@ -49,9 +49,7 @@ class ApiCache:
         return hashlib.sha256((url + "\x00" + canonical).encode()).hexdigest()
 
     def get(self, url: str, params: dict | None = None) -> str | None:
-        row = self._db.execute(
-            "SELECT body FROM http_cache WHERE key = ?", (self._key(url, params),)
-        ).fetchone()
+        row = self._db.execute("SELECT body FROM http_cache WHERE key = ?", (self._key(url, params),)).fetchone()
         return row[0] if row else None
 
     def set(self, url: str, params: dict | None, body: str) -> None:
