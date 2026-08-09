@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
+import bacteria_assistant.training as training
 from bacteria_assistant.features import (
     _colony_shape_features,
     _gradient_texture_features,
@@ -80,3 +82,68 @@ def test_extract_image_features_includes_species_features() -> None:
         "grad_angle_std",
     ):
         assert key in feats
+
+
+def _imbalanced_train_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "organism": ["Bacillus subtilis"] * 4 + ["Staphylococcus aureus"] * 16,
+            "image_path": [f"img_{i}.png" for i in range(20)],
+            "imaging_type": (
+                ["gram stain"] * 2
+                + ["media plate"] * 2
+                + ["gram stain"] * 12
+                + ["media plate"] * 4
+            ),
+        }
+    )
+
+
+def test_balance_modalities_equalizes_imbalanced_species() -> None:
+    balanced, stats = training._balance_modalities_per_species(_imbalanced_train_df(), random_state=42)
+
+    aureus = balanced[balanced["organism"] == "Staphylococcus aureus"]
+    assert aureus["imaging_type"].value_counts().to_dict() == {"gram stain": 4, "media plate": 4}
+    assert stats["Staphylococcus aureus"]["balanced"] is True
+    assert stats["Staphylococcus aureus"]["before"] == {"gram stain": 12, "media plate": 4}
+    assert stats["Staphylococcus aureus"]["after"] == {"gram stain": 4, "media plate": 4}
+
+
+def test_balance_modalities_leaves_balanced_species_untouched() -> None:
+    balanced, stats = training._balance_modalities_per_species(_imbalanced_train_df(), random_state=42)
+
+    subtilis = balanced[balanced["organism"] == "Bacillus subtilis"]
+    assert subtilis["imaging_type"].value_counts().to_dict() == {"gram stain": 2, "media plate": 2}
+    assert stats["Bacillus subtilis"]["after"] == {"gram stain": 2, "media plate": 2}
+
+
+def test_balance_modalities_reproducible() -> None:
+    a, _ = training._balance_modalities_per_species(_imbalanced_train_df(), random_state=7)
+    b, _ = training._balance_modalities_per_species(_imbalanced_train_df(), random_state=7)
+    pd.testing.assert_frame_equal(a, b)
+
+
+def test_balance_modalities_does_not_mutate_input() -> None:
+    df = _imbalanced_train_df()
+    before = df.copy(deep=True)
+    training._balance_modalities_per_species(df, random_state=42)
+    pd.testing.assert_frame_equal(df, before)
+
+
+def test_balance_modalities_single_modality_species_untouched() -> None:
+    df = pd.DataFrame(
+        {
+            "organism": ["Candida albicans"] * 4,
+            "image_path": [f"img_{i}.png" for i in range(4)],
+            "imaging_type": ["gram stain"] * 4,
+        }
+    )
+    balanced, stats = training._balance_modalities_per_species(df, random_state=42)
+    assert len(balanced) == 4
+    assert stats["Candida albicans"]["balanced"] is False
+
+
+def test_balance_modalities_empty_frame() -> None:
+    balanced, stats = training._balance_modalities_per_species(pd.DataFrame(), random_state=42)
+    assert balanced.empty
+    assert stats == {}
