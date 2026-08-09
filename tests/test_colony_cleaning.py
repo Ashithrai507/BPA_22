@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.dummy import DummyClassifier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -120,7 +120,7 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
     monkeypatch.setattr(
         training,
         "_build_image_feature_table",
-        lambda labeled_df, workspace_root: pd.DataFrame(
+        lambda labeled_df, workspace_root, *args, **kwargs: pd.DataFrame(
             {
                 "image_path": ["img_a.png", "img_b.png"],
                 "organism": ["Staphylococcus aureus", "Staphylococcus aureus"],
@@ -136,7 +136,11 @@ def test_train_models_records_colony_cleaning_meta(tmp_path, monkeypatch) -> Non
     monkeypatch.setattr(
         training,
         "_fit_best_ensemble_model",
-        lambda *a, **k: (RandomForestClassifier(), {"accuracy": 1.0}, "constant"),
+        lambda x_train, y_train, *a, **k: (
+            DummyClassifier().fit(x_train, y_train),
+            {"accuracy": 1.0},
+            "constant",
+        ),
     )
 
     metrics = training.train_models(
