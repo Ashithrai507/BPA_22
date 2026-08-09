@@ -4,6 +4,8 @@
 
 **Goal:** Raise species-level accuracy from 0.341 toward/above 0.45 by adding shape/texture features, balancing imaging modalities within the training fold, and bumping the feature version.
 
+> **DEVIATION (implemented 2026-08-09):** Modality-balanced subsampling (Tasks 3-4) was implemented, tested, and then **removed after retraining showed it hurts accuracy**. Controlled retrains on the current `dataset_full.csv` (same split/seed): baseline 0.270, features-only 0.310, features+balancing 0.262. The balancing trims the train fold (503->452 images) and starves the already small per-species classes; the new features alone improve accuracy. Final PR ships features + `FEATURE_VERSION=3` only. Also note the plan's 0.341 baseline does not reproduce on the current dataset — apples-to-apples baseline is 0.270.
+
 **Architecture:** `features.py` gains three pure helpers (`_hu_log_scale`, `_colony_shape_features`, `_gradient_texture_features`) consumed by `extract_image_features`; `training.py` gains `_balance_modalities_per_species` applied in `train_models` between the image-level holdout split and augmentation, with new `training_meta` keys. All changes are unit-tested and verified by a local retrain + `evaluate_models.py`.
 
 **Tech Stack:** Python 3.11, OpenCV (cv2), pandas, scikit-learn, numpy, pytest, ruff.

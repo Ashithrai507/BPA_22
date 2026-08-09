@@ -72,48 +72,6 @@ def _load_labeled_dataframe(dataset_csv: Path) -> pd.DataFrame:
     return labeled_df
 
 
-def _balance_modalities_per_species(
-    train_df: pd.DataFrame,
-    random_state: int = 42,
-) -> tuple[pd.DataFrame, dict[str, dict[str, Any]]]:
-    """Trim over-represented imaging modalities per species within the train fold (issue #9).
-
-    Each species with 2+ modalities is downsized so both modalities contribute the
-    minimum observed count (no replacement, seeded). Single-modality species are
-    untouched. Returns the balanced DataFrame and per-species audit stats.
-    """
-    if train_df.empty or "imaging_type" not in train_df.columns:
-        return train_df.copy(), {}
-
-    rng = np.random.default_rng(random_state)
-    balanced_parts: list[pd.DataFrame] = []
-    stats: dict[str, dict[str, Any]] = {}
-
-    for species, group in train_df.groupby("organism", sort=True):
-        modalities = [str(m) for m in sorted(group["imaging_type"].unique())]
-        before = {m: int((group["imaging_type"] == m).sum()) for m in modalities}
-        if len(modalities) < 2:
-            balanced_parts.append(group)
-            stats[str(species)] = {"before": before, "after": dict(before), "balanced": False}
-            continue
-
-        target = min(before.values())
-        kept: list[pd.DataFrame] = []
-        for modality in modalities:
-            sub = group[group["imaging_type"] == modality]
-            if len(sub) > target:
-                positions = rng.choice(np.arange(len(sub)), size=target, replace=False)
-                sub = sub.iloc[np.sort(positions)]
-            kept.append(sub)
-        balanced = pd.concat(kept)
-        balanced_parts.append(balanced)
-        after = {m: int((balanced["imaging_type"] == m).sum()) for m in modalities}
-        stats[str(species)] = {"before": before, "after": after, "balanced": True}
-
-    result = pd.concat(balanced_parts, ignore_index=True) if balanced_parts else train_df.copy()
-    return result, stats
-
-
 def _build_image_feature_table(
     labeled_df: pd.DataFrame,
     workspace_root: Path,
@@ -461,9 +419,8 @@ def train_models(
         random_state=random_state,
         stratify=labeled_df["organism"],
     )
-    balanced_train_df, modality_balance_stats = _balance_modalities_per_species(train_df, random_state)
 
-    train_table = _build_image_feature_table(balanced_train_df, workspace_root, augment=True)
+    train_table = _build_image_feature_table(train_df, workspace_root, augment=True)
     test_table = _build_image_feature_table(test_df, workspace_root, augment=False)
     if train_table.empty or test_table.empty:
         raise ValueError("Image-level holdout produced an empty train/test split.")
@@ -591,9 +548,6 @@ def train_models(
             "workspace_root": str(workspace_root),
             "labeled_image_count": int(len(labeled_df)),
             "train_image_count": int(len(train_df)),
-            "train_image_count_before_balancing": int(len(train_df)),
-            "train_image_count_after_balancing": int(len(balanced_train_df)),
-            "modality_balance_stats": modality_balance_stats,
             "test_image_count": int(len(test_df)),
             "augmented_train_rows": int(len(train_table)),
             "augment_per_image": int(AUGMENT_PER_IMAGE),
