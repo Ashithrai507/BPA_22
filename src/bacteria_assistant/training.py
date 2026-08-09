@@ -591,6 +591,7 @@ def train_models(
             "colony_rows_removed_by_cleaning": int(colony_cleaning_stats["colony_rows_removed_by_cleaning"]),
             "colony_cleaning_removals": dict(colony_cleaning_stats["colony_cleaning_removals"]),
             "feature_version": FEATURE_VERSION,
+            "image_feature_count": int(len(image_feature_cols)),
         },
         "model_choices": {
             "gram_model": gram_model_name,
