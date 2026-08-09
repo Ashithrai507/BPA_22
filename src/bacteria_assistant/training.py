@@ -461,8 +461,9 @@ def train_models(
         random_state=random_state,
         stratify=labeled_df["organism"],
     )
+    balanced_train_df, modality_balance_stats = _balance_modalities_per_species(train_df, random_state)
 
-    train_table = _build_image_feature_table(train_df, workspace_root, augment=True)
+    train_table = _build_image_feature_table(balanced_train_df, workspace_root, augment=True)
     test_table = _build_image_feature_table(test_df, workspace_root, augment=False)
     if train_table.empty or test_table.empty:
         raise ValueError("Image-level holdout produced an empty train/test split.")
@@ -590,6 +591,9 @@ def train_models(
             "workspace_root": str(workspace_root),
             "labeled_image_count": int(len(labeled_df)),
             "train_image_count": int(len(train_df)),
+            "train_image_count_before_balancing": int(len(train_df)),
+            "train_image_count_after_balancing": int(len(balanced_train_df)),
+            "modality_balance_stats": modality_balance_stats,
             "test_image_count": int(len(test_df)),
             "augmented_train_rows": int(len(train_table)),
             "augment_per_image": int(AUGMENT_PER_IMAGE),
@@ -602,6 +606,7 @@ def train_models(
             "colony_rows_removed_by_cleaning": int(colony_cleaning_stats["colony_rows_removed_by_cleaning"]),
             "colony_cleaning_removals": dict(colony_cleaning_stats["colony_cleaning_removals"]),
             "feature_version": FEATURE_VERSION,
+            "image_feature_count": int(len(image_feature_cols)),
         },
         "model_choices": {
             "gram_model": gram_model_name,

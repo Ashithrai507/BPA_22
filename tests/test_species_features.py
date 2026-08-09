@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.dummy import DummyClassifier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -89,12 +90,7 @@ def _imbalanced_train_df() -> pd.DataFrame:
         {
             "organism": ["Bacillus subtilis"] * 4 + ["Staphylococcus aureus"] * 16,
             "image_path": [f"img_{i}.png" for i in range(20)],
-            "imaging_type": (
-                ["gram stain"] * 2
-                + ["media plate"] * 2
-                + ["gram stain"] * 12
-                + ["media plate"] * 4
-            ),
+            "imaging_type": (["gram stain"] * 2 + ["media plate"] * 2 + ["gram stain"] * 12 + ["media plate"] * 4),
         }
     )
 
@@ -147,3 +143,79 @@ def test_balance_modalities_empty_frame() -> None:
     balanced, stats = training._balance_modalities_per_species(pd.DataFrame(), random_state=42)
     assert balanced.empty
     assert stats == {}
+
+
+def test_train_models_records_modality_balance_meta(tmp_path, monkeypatch) -> None:
+    csv_path = tmp_path / "dataset.csv"
+    pd.DataFrame(
+        {
+            "organism": ["Bacillus subtilis"] * 4 + ["Staphylococcus aureus"] * 16,
+            "image_path": [f"img_{i}.png" for i in range(20)],
+            "imaging_type": (["gram stain"] * 2 + ["media plate"] * 2 + ["gram stain"] * 8 + ["media plate"] * 8),
+        }
+    ).to_csv(csv_path, index=False)
+
+    captured: dict[str, pd.DataFrame] = {}
+
+    def fake_split(df, test_size=None, random_state=None, stratify=None):
+        n_train = int(len(df) * 0.8)
+        return df.iloc[:n_train].copy(), df.iloc[n_train:].copy()
+
+    def fake_image_table(labeled_df, workspace_root, augment=False) -> pd.DataFrame:
+        if augment:
+            captured["train"] = labeled_df.copy()
+        return pd.DataFrame(
+            {
+                "image_path": ["img_0.png", "img_1.png"],
+                "organism": ["Bacillus subtilis", "Staphylococcus aureus"],
+                "organism_type": ["bacteria", "bacteria"],
+                "gram_label": ["gram_positive", "gram_positive"],
+                "shape_label": ["bacilli", "cocci"],
+                "taxonomy_group": ["gram_positive_bacilli", "gram_positive_cocci"],
+                "imaging_type": ["gram stain", "gram stain"],
+                "r_mean": [0.5, 0.6],
+            }
+        )
+
+    monkeypatch.setattr(training, "train_test_split", fake_split)
+    monkeypatch.setattr(training, "_build_image_feature_table", fake_image_table)
+    monkeypatch.setattr(
+        training,
+        "_build_colony_feature_table",
+        lambda labeled_df, workspace_root: pd.DataFrame(
+            {
+                "image_id": ["img_a", "img_b", "img_c", "img_d", "img_e", "img_f"],
+                "shape_label": ["cocci", "cocci", "bacilli", "bacilli", "fungal", "spiral"],
+                "aspect_ratio": [1.1, 3.0, 1.8, 1.05, 1.4, 2.5],
+                "solidity": [0.97, 0.98, 0.96, 0.93, 0.99, 0.9],
+                "imaging_type": ["gram", "gram", "plate", "plate", "gram", "plate"],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        training,
+        "_fit_best_ensemble_model",
+        lambda x_train, y_train, *a, **k: (
+            DummyClassifier(strategy="most_frequent").fit(x_train, y_train),
+            {"accuracy": 1.0},
+            "constant",
+        ),
+    )
+
+    metrics = training.train_models(
+        dataset_csv=csv_path,
+        workspace_root=tmp_path,
+        model_output_path=tmp_path / "models.joblib",
+        random_state=42,
+    )
+
+    meta = metrics["training_meta"]
+    assert meta["train_image_count_before_balancing"] == 16
+    assert meta["train_image_count_after_balancing"] == 12
+    assert meta["image_feature_count"] == 1
+    assert meta["modality_balance_stats"]["Staphylococcus aureus"]["after"] == {
+        "gram stain": 4,
+        "media plate": 4,
+    }
+    aureus = captured["train"][captured["train"]["organism"] == "Staphylococcus aureus"]
+    assert aureus["imaging_type"].value_counts().to_dict() == {"gram stain": 4, "media plate": 4}
