@@ -37,5 +37,8 @@ known-first-party = ["bacteria_assistant", "protein_engine"]
 "scripts/bacteria_ui.py" = ["E402"]
 "scripts/predict_bacteria.py" = ["E402"]
 "scripts/train_model.py" = ["E402"]
+"scripts/train_dl.py" = ["E402"]
 "scripts/evaluate_models.py" = ["E402"]
 "tests/*.py" = ["E402"]
+# dl/__init__.py pins OpenCV/torch thread pools before importing the model on purpose.
+"src/bacteria_assistant/dl/__init__.py" = ["E402"]

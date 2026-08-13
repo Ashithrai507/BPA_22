@@ -34,6 +34,12 @@ def parse_args() -> argparse.Namespace:
         default=PROJECT_ROOT / MODEL_PATH,
         help="Output path for trained model artifact",
     )
+    parser.add_argument(
+        "--dl",
+        type=Path,
+        default=None,
+        help="Path to embedding_model.pt; retrain sklearn layer on DL embeddings",
+    )
     return parser.parse_args()
 
 
@@ -43,6 +49,7 @@ def main() -> None:
         dataset_csv=args.dataset_csv,
         workspace_root=args.workspace_root,
         model_output_path=args.output_model,
+        embedding_model_path=args.dl,
     )
     print(json.dumps(metrics, indent=2))
 

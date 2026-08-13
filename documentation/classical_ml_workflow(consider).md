@@ -13,11 +13,12 @@ Everything below is traced from the actual code:
 | Features       | `src/bacteria_assistant/features.py`  |
 | Training       | `src/bacteria_assistant/training.py`  |
 | Inference      | `src/bacteria_assistant/inference.py` |
-| CLI training   | `scripts/train_model.py`             |
-| CLI inference  | `scripts/predict_bacteria.py`        |
+| CLI training   | `train_model.py`                      |
+| CLI inference  | `predict_bacteria.py`                 |
 
 ---
-![alt text](2026-08-04_14-02-46.tiff)
+
+
 
 
 ## 1) The Big Picture
@@ -324,7 +325,7 @@ reported):
 
 ## 7) Worked Example (single image end-to-end)
 
-Input: `"data/dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png"`
+Input: `"Bacteria dataset/Bacillus subtilis_gram stain/Bacillus subtilis_gram stain_1.png"`
 
 1. Read → BGR ndarray.
 2. Resize 256×256 → 616 global features.
@@ -384,9 +385,9 @@ group) and isolates errors.
   confidence, while per-colony shape confidence is a *weighted blend* of class
   dominance and mean model probability.
 - **UI runs inference twice** (`basic` + `advanced`) per Analyze click
-  (`scripts/bacteria_ui.py` `_predict`), so a single analysis performs Steps 1–12 twice.
+  (`bacteria_ui.py` `_predict`), so a single analysis performs Steps 1–12 twice.
 - The trained artifact in `artifacts/` was produced in a different workspace
-  (`BPA22_clone`); retrain locally with `python scripts/train_model.py` to refresh paths
+  (`BPA22_clone`); retrain locally with `python train_model.py` to refresh paths
   and metrics.
 
 ---
@@ -395,14 +396,14 @@ group) and isolates errors.
 
 ```bash
 # Train
-python scripts/train_model.py
+python train_model.py
 
 # Predict (basic or advanced)
-python scripts/predict_bacteria.py --image "path/to/image.png" --mode basic
-python scripts/predict_bacteria.py --image "path/to/image.png" --mode advanced
+python predict_bacteria.py --image "path/to/image.png" --mode basic
+python predict_bacteria.py --image "path/to/image.png" --mode advanced
 
 # GUI
-python scripts/bacteria_ui.py
+python bacteria_ui.py
 
 # Tests (output contract)
 python -m pytest -q

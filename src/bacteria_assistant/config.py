@@ -125,7 +125,7 @@ MODEL_PATH = _env_path("BACTERIA_MODEL_PATH", str(ARTIFACT_DIR / "bacteria_model
 
 
 # Bump whenever feature extraction changes; forces model artifact refresh.
-FEATURE_VERSION = 2
+FEATURE_VERSION = 3
 
 # CLAHE illumination normalization (issue #8 - imaging modality confounder).
 CLAHE_CLIP_LIMIT = 2.0

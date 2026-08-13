@@ -34,7 +34,29 @@ def load_models(model_path: str | Path) -> dict[str, Any]:
     model_path = Path(model_path)
     if not model_path.exists():
         raise FileNotFoundError(f"Trained model file not found: {model_path}")
-    return joblib.load(model_path)
+    artifacts = joblib.load(model_path)
+    _attach_embedding_model(artifacts, model_path.parent)
+    return artifacts
+
+
+def _attach_embedding_model(artifacts: dict[str, Any], artifacts_dir: Path) -> None:
+    """Load the DL embedding model if the artifact points to one (optional)."""
+    embedding_path = artifacts.get("embedding_model_path")
+    if not embedding_path:
+        return
+    embedding_path = Path(embedding_path)
+    if not embedding_path.is_absolute():
+        embedding_path = artifacts_dir / embedding_path
+    if not embedding_path.exists():
+        return
+
+    from .dl.extract import load_embedding_model
+
+    model, encoders, config = load_embedding_model(embedding_path)
+    artifacts["_embedding_model"] = model
+    artifacts["_embedding_encoders"] = encoders
+    artifacts["_embedding_config"] = config
+    artifacts["_embedding_input_size"] = int(config.get("input_size", 224))
 
 
 def _shape_by_heuristic(shape_from_model: str, aspect_ratio: float, circularity: float) -> str:
@@ -121,7 +143,20 @@ def predict_bacteria_image(
     image = read_image(str(image_path))
 
     image_features = extract_image_features(image)
-    image_vector = pd.DataFrame([image_features])[artifacts["image_feature_columns"]]
+
+    embedding_model = artifacts.get("_embedding_model")
+    input_size = artifacts.get("_embedding_input_size", 224)
+    if embedding_model is not None:
+        from .dl.extract import extract_embedding
+
+        emb = extract_embedding(embedding_model, Path(image_path), input_size=input_size)
+        emb_cols = artifacts["image_feature_columns"]
+        image_vector = pd.DataFrame([dict(zip(emb_cols, emb.tolist(), strict=False))])[emb_cols]
+        species_encoder = artifacts.get("_embedding_encoders", {}).get("species")
+        dl_species_prediction = species_encoder is not None
+    else:
+        dl_species_prediction = False
+        image_vector = pd.DataFrame([image_features])[artifacts["image_feature_columns"]]
 
     organism_metadata = artifacts.get("organism_metadata", ORGANISM_METADATA)
 
@@ -153,12 +188,29 @@ def predict_bacteria_image(
             "Please retrain the model by running scripts/train_model.py."
         )
 
-    predicted_bacteria_name, organism_confidence = _predict_species_with_group_constraint(
-        artifacts,
-        organism_model,
-        image_vector,
-        predicted_group,
-    )
+    if not dl_species_prediction:
+        predicted_bacteria_name, organism_confidence = _predict_species_with_group_constraint(
+            artifacts,
+            organism_model,
+            image_vector,
+            predicted_group,
+        )
+    else:
+        from .dl.extract import species_probabilities
+
+        probs = species_probabilities(
+            embedding_model,
+            Path(image_path),
+            species_encoder,
+            input_size=input_size,
+            tta=True,
+        )
+        candidates = [org for org in ORGANISMS_BY_GROUP.get(predicted_group, []) if org in probs]
+        if candidates:
+            predicted_bacteria_name = max(candidates, key=lambda org: probs[org])
+        else:
+            predicted_bacteria_name = max(probs, key=probs.get)
+        organism_confidence = probs[predicted_bacteria_name]
 
     gram_model = artifacts["gram_model"]
     gram_label = str(gram_model.predict(image_vector)[0])

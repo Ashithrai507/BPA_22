@@ -110,6 +110,49 @@ def _build_image_feature_table(
     return pd.DataFrame(rows)
 
 
+def _build_image_embedding_table(
+    labeled_df: pd.DataFrame,
+    embedding_model: Any,
+    embedding_dim: int,
+    workspace_root: Path,
+    input_size: int = 224,
+) -> pd.DataFrame:
+    """Build an image table whose feature columns are DL embeddings (emb_0..emb_{d-1}).
+
+    Respects the caller's train/test split — embeddings are extracted from the
+    already-split DataFrame so the shared holdout stays leakage-free. No
+    photometric augmentation is applied here; the DL model has its own transform
+    pipeline (augmentation off by default after tuning).
+    """
+    import torch
+
+    from .dl.extract import extract_embedding
+
+    embedding_model.eval()
+    emb_cols = [f"emb_{i}" for i in range(embedding_dim)]
+
+    rows: list[dict[str, Any]] = []
+    for _, sample in labeled_df.iterrows():
+        image_path = _resolve_image_path(workspace_root, str(sample["image_path"]))
+        with torch.inference_mode():
+            emb = extract_embedding(embedding_model, Path(image_path), input_size=input_size)
+        f = dict(zip(emb_cols, emb.tolist(), strict=False))
+        f.update(
+            {
+                "image_path": str(image_path),
+                "organism": sample["organism"],
+                "organism_type": sample["organism_type"],
+                "gram_label": sample["gram_label"],
+                "shape_label": sample["shape_label"],
+                "taxonomy_group": sample["taxonomy_group"],
+                "imaging_type": sample["imaging_type"],
+            }
+        )
+        rows.append(f)
+
+    return pd.DataFrame(rows)
+
+
 def _build_colony_feature_table(labeled_df: pd.DataFrame, workspace_root: Path) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for _, sample in labeled_df.iterrows():
@@ -403,6 +446,7 @@ def train_models(
     workspace_root: str | Path,
     model_output_path: str | Path | None = None,
     random_state: int = 42,
+    embedding_model_path: str | Path | None = None,
 ) -> dict[str, Any]:
     dataset_csv = Path(dataset_csv)
     workspace_root = Path(workspace_root)
@@ -420,8 +464,30 @@ def train_models(
         stratify=labeled_df["organism"],
     )
 
-    train_table = _build_image_feature_table(train_df, workspace_root, augment=True)
-    test_table = _build_image_feature_table(test_df, workspace_root, augment=False)
+    if embedding_model_path is not None:
+        from .dl.extract import load_embedding_model
+
+        embedding_path = Path(embedding_model_path)
+        embedding_model, _, embedding_config = load_embedding_model(embedding_path)
+        embedding_dim = int(embedding_config.get("embedding_dim", 1280))
+        embedding_input_size = int(embedding_config.get("input_size", 224))
+        train_table = _build_image_embedding_table(
+            train_df,
+            embedding_model,
+            embedding_dim=embedding_dim,
+            workspace_root=workspace_root,
+            input_size=embedding_input_size,
+        )
+        test_table = _build_image_embedding_table(
+            test_df,
+            embedding_model,
+            embedding_dim=embedding_dim,
+            workspace_root=workspace_root,
+            input_size=embedding_input_size,
+        )
+    else:
+        train_table = _build_image_feature_table(train_df, workspace_root, augment=True)
+        test_table = _build_image_feature_table(test_df, workspace_root, augment=False)
     if train_table.empty or test_table.empty:
         raise ValueError("Image-level holdout produced an empty train/test split.")
 
@@ -570,6 +636,9 @@ def train_models(
             "group_species_models": group_species_model_choices,
         },
     }
+
+    if embedding_model_path is not None:
+        artifacts["embedding_model_path"] = str(Path(embedding_model_path).name)
 
     joblib.dump(artifacts, model_output_path)
 
