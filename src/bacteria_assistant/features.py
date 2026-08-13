@@ -101,7 +101,53 @@ def extract_image_features(image: np.ndarray) -> dict[str, float]:
     for i, value in enumerate(spatial.flatten()):
         features[f"gray_spatial_{i}"] = float(value)
 
+    features.update(_colony_shape_features(gray))
+    features.update(_gradient_texture_features(gray))
+
     return features
+
+
+def _hu_log_scale(hu: np.ndarray) -> np.ndarray:
+    return np.sign(hu) * np.log1p(np.abs(hu))
+
+
+def _colony_shape_features(gray: np.ndarray) -> dict[str, float]:
+    contours = _choose_best_mask(gray)
+    features: dict[str, float] = {"colony_count": float(len(contours))}
+    for i in range(7):
+        features[f"hu_{i}"] = 0.0
+        features[f"colony_hu_mean_{i}"] = 0.0
+        features[f"colony_hu_std_{i}"] = 0.0
+    if not contours:
+        return features
+
+    mask = np.zeros(gray.shape, dtype=np.uint8)
+    cv2.drawContours(mask, contours, -1, 255, thickness=-1)
+    image_hu = _hu_log_scale(cv2.HuMoments(cv2.moments(mask)).flatten())
+    for i, value in enumerate(image_hu):
+        features[f"hu_{i}"] = float(value)
+
+    per_colony = np.stack([_hu_log_scale(cv2.HuMoments(cv2.moments(c)).flatten()) for c in contours])
+    mean = per_colony.mean(axis=0)
+    std = per_colony.std(axis=0)
+    for i in range(7):
+        features[f"colony_hu_mean_{i}"] = float(mean[i])
+        features[f"colony_hu_std_{i}"] = float(std[i])
+    return features
+
+
+def _gradient_texture_features(gray: np.ndarray) -> dict[str, float]:
+    gx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+    gy = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+    mag = np.hypot(gx, gy)
+    angle = np.arctan2(gy, gx)
+    r = np.hypot(np.mean(np.cos(angle)), np.mean(np.sin(angle)))
+    angle_std = float(np.sqrt(max(-2.0 * np.log(r + 1e-12), 0.0)))
+    return {
+        "grad_mag_mean": float(np.mean(mag)),
+        "grad_mag_std": float(np.std(mag)),
+        "grad_angle_std": angle_std,
+    }
 
 
 def _threshold_mask(gray: np.ndarray, invert: bool) -> np.ndarray:
