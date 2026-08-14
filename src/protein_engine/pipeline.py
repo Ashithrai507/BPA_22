@@ -46,6 +46,7 @@ def run(
         transport=transport,
         rate_limit=0.0 if offline else (rate_limit if rate_limit is not None else RATE_LIMIT_DEFAULT),
         backoff=RETRY_BACKOFF,
+        allow_network=not offline,
     )
     taxonomy_cache = TaxonomyCache(cache_dir_path / "taxonomy.db")
 

@@ -31,10 +31,12 @@ class ApiCache:
         transport: object | None = None,
         rate_limit: float = RATE_LIMIT_DEFAULT,
         backoff: Sequence[float] = RETRY_BACKOFF,
+        allow_network: bool = True,
     ) -> None:
         self._transport = transport if transport is not None else requests
         self._rate_limit = rate_limit
         self._backoff = list(backoff)
+        self._allow_network = allow_network
         self._last_request = 0.0
         self._db = sqlite3.connect(path)
         self._db.execute(
@@ -72,11 +74,13 @@ class ApiCache:
         url: str,
         params: dict | None = None,
         headers: dict | None = None,
-        allow_network: bool = True,
+        allow_network: bool | None = None,
     ) -> str:
         cached = self.get(url, params)
         if cached is not None:
             return cached
+        if allow_network is None:
+            allow_network = self._allow_network
         if not allow_network:
             raise CacheMissError(f"no cached response for {url} {params}")
         attempts = self._backoff or [0.0]

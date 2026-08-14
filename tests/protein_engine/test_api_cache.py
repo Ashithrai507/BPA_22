@@ -40,3 +40,13 @@ def test_fetch_offline_uses_cache_else_raises(tmp_path) -> None:
     assert cache.fetch("http://x", allow_network=False) == '{"a": 1}'
     with pytest.raises(CacheMissError):
         cache.fetch("http://other", allow_network=False)
+
+
+def test_fetch_allow_network_false_uses_constructor_default(tmp_path) -> None:
+    transport = FakeTransport([json_response({"a": 1})])
+    cache = _cache(tmp_path / "http.db", transport, allow_network=False)
+    with pytest.raises(CacheMissError):
+        cache.fetch("http://x")
+    cache.set("http://x", None, '{"a": 1}')
+    assert cache.fetch("http://x") == '{"a": 1}'
+    assert len(transport.calls) == 0
