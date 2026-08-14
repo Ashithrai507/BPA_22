@@ -27,3 +27,8 @@ def test_cli_missing_species_and_image_exits_two() -> None:
     result = _run()
     assert result.returncode == 2
     assert "either --species or --image is required" in result.stderr
+
+
+def test_cli_top_n_zero_rejected() -> None:
+    result = _run("--species", "Bacillus subtilis", "--top-n", "0")
+    assert result.returncode == 2

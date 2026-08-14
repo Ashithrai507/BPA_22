@@ -16,6 +16,16 @@ from protein_engine.retrieval.api_cache import ApiError, CacheMissError
 from protein_engine.taxonomy.resolver import ResolutionError
 
 
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid positive int: {value!r}") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"{value} must be a positive integer")
+    return parsed
+
+
 def _predict_species(image_path: Path) -> str:
     try:
         from bacteria_assistant.config import MODEL_PATH
@@ -37,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rank folding-ready proteins for a species.")
     parser.add_argument("--species", type=str, help="Scientific species name")
     parser.add_argument("--image", type=Path, help="Petri dish image (predicts species via CV)")
-    parser.add_argument("--top-n", type=int, default=DEFAULT_TOP_N, help="Number of proteins to return")
+    parser.add_argument("--top-n", type=_positive_int, default=DEFAULT_TOP_N, help="Number of proteins to return")
     parser.add_argument("--output-dir", type=Path, default=PATHS.output_dir)
     parser.add_argument("--cache-dir", type=Path, default=PATHS.cache_dir)
     parser.add_argument("--reference-dir", type=Path, default=PATHS.reference_dir)
