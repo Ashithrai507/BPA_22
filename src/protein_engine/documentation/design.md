@@ -134,8 +134,8 @@ Normalized record shape:
 
 ### 4.3 Rate limiting, retry, cache
 
-- **Rate limit:** token-bucket, 5 req/s for UniProt (their guidance is ≤10),
-  3 req/s for NCBI without an API key.
+- **Rate limit:** token-bucket, single shared default of 3 req/s applied to all
+  endpoints (`RATE_LIMIT_DEFAULT` in `config.py`).
 - **Retry:** exponential backoff (0.5 s → 1 s → 2 s, max 3) on 429/5xx, then
   fallback or cache.
 - **Cache:** every HTTP response stored in `cache/http.db` keyed by
