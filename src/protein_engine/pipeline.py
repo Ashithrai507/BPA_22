@@ -61,9 +61,7 @@ def run(
     curated = load_curated(reference_dir)
     shortlist = preselect(proteins, curated=curated, limit=max(PRESELECT_LIMIT, top_n * 5))
     structure_flags = {
-        p["accession"]: pdb_client.has_structure(p["accession"], cache)
-        for p in shortlist
-        if p.get("accession")
+        p["accession"]: pdb_client.has_structure(p["accession"], cache) for p in shortlist if p.get("accession")
     }
     ranked = rank(shortlist, structure_flags=structure_flags, curated=curated, top_n=top_n)
     valid, excluded = validator.split_valid(ranked)

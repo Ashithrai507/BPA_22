@@ -28,9 +28,7 @@ def dedupe_by_accession(proteins: list[dict]) -> list[dict]:
     return result
 
 
-def split_valid(
-    proteins: list[dict], min_length: int = MIN_SEQUENCE_LENGTH
-) -> tuple[list[dict], list[dict]]:
+def split_valid(proteins: list[dict], min_length: int = MIN_SEQUENCE_LENGTH) -> tuple[list[dict], list[dict]]:
     valid: list[dict] = []
     excluded: list[dict] = []
     for protein in dedupe_by_accession(proteins):
