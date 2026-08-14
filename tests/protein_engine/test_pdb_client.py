@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import pytest
+from conftest import FakeResponse, FakeTransport, json_response
 
 from protein_engine.retrieval.api_cache import ApiCache, ApiError
 from protein_engine.retrieval.pdb_client import has_structure
-
-from conftest import FakeResponse, FakeTransport, json_response
 
 
 def test_has_structure_true(tmp_path) -> None:
