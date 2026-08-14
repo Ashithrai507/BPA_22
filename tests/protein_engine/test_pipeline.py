@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from conftest import FakeResponse, FakeTransport, json_response
 
 from protein_engine.pipeline import load_curated, run
@@ -102,3 +103,30 @@ def test_run_offline_serves_from_cache(tmp_path) -> None:
     online.pop("query_timestamp")
     offline.pop("query_timestamp")
     assert offline == online
+
+
+def test_run_degrades_on_pdb_error(tmp_path) -> None:
+    reference_dir = tmp_path / "ref"
+    reference_dir.mkdir()
+    (reference_dir / "essential_genes.csv").write_text("gene\nspoA\n")
+    results = [_uniprot_result("P37476", "spoA", 405)]
+    results += [_uniprot_result(f"P0A0{str(i).zfill(2)}", f"gene{i}", 300) for i in range(11)]
+    transport = FakeTransport(
+        [
+            json_response({"esearchresult": {"idlist": ["224308"]}}),
+            json_response({"result": {"224308": {"scientificname": "Bacillus subtilis"}}}),
+            json_response({"results": results}),
+            *[FakeResponse("", status_code=403) for _ in range(12)],
+        ]
+    )
+    with pytest.warns(Warning):
+        payload = run(
+            "Bacillus subtilis",
+            output_dir=tmp_path / "out",
+            cache_dir=tmp_path / "cache",
+            reference_dir=str(reference_dir),
+            transport=transport,
+            rate_limit=0.0,
+        )
+    assert payload["selected_proteins"]
+    assert all(rec["has_structure"] is False for rec in payload["selected_proteins"])

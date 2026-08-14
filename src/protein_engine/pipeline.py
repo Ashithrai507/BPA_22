@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 from protein_engine.config import DEFAULT_TOP_N, PATHS, PRESELECT_LIMIT, RATE_LIMIT_DEFAULT, RETRY_BACKOFF
 from protein_engine.ranking import essential, resistance, virulence
 from protein_engine.ranking.scorer import preselect, rank
 from protein_engine.retrieval import ncbi_client, pdb_client, uniprot_client
-from protein_engine.retrieval.api_cache import ApiCache
+from protein_engine.retrieval.api_cache import ApiCache, ApiError
 from protein_engine.sequence import exporter, validator
 from protein_engine.taxonomy.cache import TaxonomyCache
 from protein_engine.taxonomy.resolver import resolve
@@ -61,10 +62,19 @@ def run(
 
     curated = load_curated(reference_dir)
     shortlist = preselect(proteins, curated=curated, limit=max(PRESELECT_LIMIT, top_n * 5))
-    structure_flags = {
-        p["accession"]: pdb_client.has_structure(p["accession"], cache) for p in shortlist if p.get("accession")
-    }
+    structure_flags = {}
+    for p in shortlist:
+        accession = p.get("accession")
+        if not accession:
+            continue
+        try:
+            structure_flags[accession] = pdb_client.has_structure(accession, cache)
+        except ApiError as exc:
+            warnings.warn(f"PDB structure lookup failed for {accession}: {exc}", stacklevel=2)
+            structure_flags[accession] = False
     ranked = rank(shortlist, structure_flags=structure_flags, curated=curated, top_n=top_n)
+    for rec in ranked:
+        rec["has_structure"] = structure_flags.get(rec.get("accession"), False)
     valid, excluded = validator.split_valid(ranked)
 
     out = exporter.write(
