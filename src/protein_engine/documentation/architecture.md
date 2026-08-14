@@ -89,7 +89,8 @@ src/protein_engine/
      reviewed, subcellular_location, keywords, cc_function, xref_pdb, xref_alphafold`.
    - **Reviewed-only first (locked in):** if the reviewed result set is empty or
      < 10 records, retry with `reviewed:false`.
-   - Polite token-bucket rate limit (5 req/s UniProt, 3 req/s NCBI), retry with
+   - Polite token-bucket rate limit (3 req/s shared across endpoints, see
+     `RATE_LIMIT_DEFAULT`), retry with
      exponential backoff, cache each response in `api_cache.py` (keyed by query + page).
    - Empty result → fallback `ncbi_client.fetch_proteins(taxonomy_id)`
      (`esearch` db=`protein` by `txid<id>[Organism]` → `efetch` FASTA).
@@ -206,8 +207,8 @@ def main(argv: list[str] | None = None) -> int: ...
 - API base URLs: UniProt `https://rest.uniprot.org/`, NCBI
   `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/`, PDB
   `https://data.rcsb.org/rest/v1/`.
-- Rate limits (requests/sec): 5 UniProt, 3 NCBI (token-bucket); retry/backoff
-  0.5 s → 1 s → 2 s, max 3.
+- Rate limits (requests/sec): 3 shared across all endpoints (token-bucket,
+  `RATE_LIMIT_DEFAULT`); retry/backoff 0.5 s → 1 s → 2 s, max 3.
 - `RANKING_WEIGHTS`.
 - Cache/output directory defaults (overridable via `.env`:
   `PROTEIN_CACHE_DIR`, `PROTEIN_OUTPUT_DIR`, `PROTEIN_REFERENCE_DIR`).
