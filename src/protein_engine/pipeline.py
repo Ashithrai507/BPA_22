@@ -26,6 +26,8 @@ def load_curated(reference_dir: Path | str) -> dict:
         path = reference / filename
         if path.exists():
             tables[name] = loader(path)
+        else:
+            warnings.warn(f"curated table not found: {path}", stacklevel=2)
     return tables
 
 

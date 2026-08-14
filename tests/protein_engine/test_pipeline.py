@@ -29,6 +29,14 @@ def test_load_curated_picks_existing_files(tmp_path) -> None:
     assert tables["essential"].matches({"gene": "spoA", "accession": "x"}) is True
 
 
+def test_load_curated_warns_on_missing(tmp_path) -> None:
+    (tmp_path / "essential_genes.csv").write_text("gene\nspoA\n")
+    with pytest.warns(Warning) as record:
+        tables = load_curated(tmp_path)
+    assert "essential" in tables
+    assert any("curated table not found" in str(w.message) for w in record)
+
+
 def test_run_end_to_end(tmp_path) -> None:
     reference_dir = tmp_path / "ref"
     reference_dir.mkdir()
