@@ -56,7 +56,9 @@ def test_run_end_to_end(tmp_path) -> None:
     assert payload["taxonomy_id"] == 224308
     assert payload["source"] == "uniprot"
     assert payload["selected_proteins"][0]["accession"] == "P37476"
+    assert payload["selected_proteins"][0]["rank"] == 1
     assert payload["selected_proteins"][0]["score"] == 0.55
+    assert "has_structure" in payload["selected_proteins"][0]
     assert payload["output_dir"]
     out_dir = tmp_path / "out" / "bacillus_subtilis"
     assert (out_dir / "proteins.json").exists()

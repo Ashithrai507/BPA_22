@@ -73,7 +73,8 @@ def run(
             warnings.warn(f"PDB structure lookup failed for {accession}: {exc}", stacklevel=2)
             structure_flags[accession] = False
     ranked = rank(shortlist, structure_flags=structure_flags, curated=curated, top_n=top_n)
-    for rec in ranked:
+    for i, rec in enumerate(ranked, start=1):
+        rec["rank"] = i
         rec["has_structure"] = structure_flags.get(rec.get("accession"), False)
     valid, excluded = validator.split_valid(ranked)
 
