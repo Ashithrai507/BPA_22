@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from protein_engine.ranking._common import CuratedTable
 from protein_engine.ranking.scorer import compute_score, preselect, rank, score_terms
 
@@ -28,7 +30,7 @@ def test_score_terms_unreviewed_evidence_is_half() -> None:
 
 def test_compute_score_uses_weights() -> None:
     terms = {"essential": 1.0, "virulence": 0.0, "resistance": 0.0, "evidence": 1.0, "structure": 1.0}
-    assert compute_score(terms) == 0.55
+    assert compute_score(terms) == pytest.approx(0.55)
 
 
 def test_rank_orders_and_injects_breakdown() -> None:

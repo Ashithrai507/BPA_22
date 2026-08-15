@@ -35,7 +35,7 @@ def _first_image() -> Path:
         if dataset_root.exists():
             for path in dataset_root.rglob("*.png"):
                 return path
-    raise FileNotFoundError("No PNG image found in dataset.")
+    pytest.skip(f"Dataset root not found in {dataset_roots}. See CONTRIBUTING.md.")
 
 
 @pytest.fixture
