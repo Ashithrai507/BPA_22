@@ -38,7 +38,7 @@ def to_fasta(proteins: list[dict], resolved_name: str) -> str:
             resolved_name,
         ]
         header = "|".join(str(f) for f in fields if f)
-        chunks.append(f">{header}\n{_wrap(protein.get("sequence") or "")}")
+        chunks.append(f">{header}\n{_wrap(protein.get('sequence') or '')}")
     return "\n".join(chunks) + ("\n" if chunks else "")
 
 
