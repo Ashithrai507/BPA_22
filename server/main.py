@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
 from .dependencies import get_db_path
-from .routers import predict
+from .routers import predict, proteins
 
 
 @asynccontextmanager
@@ -29,6 +29,7 @@ app.add_middleware(
 )
 
 app.include_router(predict.router)
+app.include_router(proteins.router)
 
 
 @app.get("/api/health")
