@@ -7,9 +7,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = PROJECT_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from server.main import app
 
@@ -58,3 +57,8 @@ def test_get_prediction_by_id(mock_predict) -> None:
     detail = client.get(f"/api/predict/{pred_id}")
     assert detail.status_code == 200
     assert detail.json()["id"] == pred_id
+
+
+def test_get_prediction_404_for_nonexistent_id() -> None:
+    resp = client.get("/api/predict/99999")
+    assert resp.status_code == 404

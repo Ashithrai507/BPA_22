@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from bacteria_assistant.inference import predict_bacteria_image
 
-from ..db import get_prediction, init_db, insert_prediction, list_predictions
+from ..db import get_prediction, insert_prediction, list_predictions
 from ..dependencies import get_db_path
 from ..models import HistoryResponse, PredictResponse
 
@@ -32,7 +32,6 @@ async def predict(
         tmp_path.unlink(missing_ok=True)
 
     db_path = get_db_path()
-    init_db(db_path)
 
     row_id = insert_prediction(
         db_path,
@@ -67,7 +66,6 @@ async def predict(
 @router.get("/history", response_model=HistoryResponse)
 def history(limit: int = 50, offset: int = 0) -> HistoryResponse:
     db_path = get_db_path()
-    init_db(db_path)
     data = list_predictions(db_path, limit=limit, offset=offset)
     return HistoryResponse(
         total=data["total"],
