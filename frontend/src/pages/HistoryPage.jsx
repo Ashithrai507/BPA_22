@@ -7,16 +7,20 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const limit = 20;
 
   const fetchHistory = async (offset = 0) => {
     setLoading(true);
+    setError(null);
     try {
       const resp = await api.get(`/predict/history?limit=${limit}&offset=${offset}`);
       setHistory(resp.data.items);
       setTotal(resp.data.total);
-    } catch {}
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Failed to load history.');
+    }
     setLoading(false);
   };
 
@@ -42,6 +46,7 @@ export default function HistoryPage() {
       <h2 className="text-2xl font-bold text-gray-800">Pipeline History</h2>
 
       {loading && <p className="text-blue-600">Loading...</p>}
+      {error && <p className="text-red-600">{error}</p>}
 
       <div className="bg-white rounded-lg shadow divide-y">
         {history.map((h) => (

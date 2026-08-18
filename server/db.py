@@ -132,6 +132,7 @@ def list_full_history(db_path: Path, *, limit: int = 50, offset: int = 0) -> dic
 
 def delete_prediction(db_path: Path, prediction_id: int) -> bool:
     conn = _connect(db_path)
+    conn.execute("DELETE FROM protein_analyses WHERE prediction_id = ?", (prediction_id,))
     cursor = conn.execute("DELETE FROM predictions WHERE id = ?", (prediction_id,))
     conn.commit()
     deleted = cursor.rowcount > 0
