@@ -115,6 +115,57 @@ def test_run_offline_serves_from_cache(tmp_path) -> None:
     assert offline == online
 
 
+def test_run_falls_back_to_ncbi_when_uniprot_empty(tmp_path) -> None:
+    reference_dir = tmp_path / "ref"
+    reference_dir.mkdir()
+    (reference_dir / "essential_genes.csv").write_text("gene\nspoA\n")
+    ncbi_fasta = ">sp|P37476|SP0A_BACSU Stage 0 sporulation protein A\n" + "M" * 100 + "\n"
+    transport = FakeTransport(
+        [
+            json_response({"esearchresult": {"idlist": ["224308"]}}),
+            json_response({"result": {"224308": {"scientificname": "Bacillus subtilis"}}}),
+            json_response({"results": []}),
+            json_response({"results": []}),
+            json_response({"esearchresult": {"idlist": ["12345"]}}),
+            FakeResponse(ncbi_fasta),
+            json_response([]),
+        ]
+    )
+    payload = run(
+        "Bacillus subtilis",
+        output_dir=tmp_path / "out",
+        cache_dir=tmp_path / "cache",
+        reference_dir=str(reference_dir),
+        transport=transport,
+        rate_limit=0.0,
+    )
+    assert payload["source"] == "ncbi"
+    assert payload["selected_proteins"]
+
+
+def test_run_raises_on_empty_proteins(tmp_path) -> None:
+    reference_dir = tmp_path / "ref"
+    reference_dir.mkdir()
+    transport = FakeTransport(
+        [
+            json_response({"esearchresult": {"idlist": ["224308"]}}),
+            json_response({"result": {"224308": {"scientificname": "Bacillus subtilis"}}}),
+            json_response({"results": []}),
+            json_response({"results": []}),
+            json_response({"esearchresult": {"idlist": []}}),
+        ]
+    )
+    with pytest.raises(RuntimeError, match="no proteins found"):
+        run(
+            "Bacillus subtilis",
+            output_dir=tmp_path / "out",
+            cache_dir=tmp_path / "cache",
+            reference_dir=str(reference_dir),
+            transport=transport,
+            rate_limit=0.0,
+        )
+
+
 def test_run_degrades_on_pdb_error(tmp_path) -> None:
     reference_dir = tmp_path / "ref"
     reference_dir.mkdir()

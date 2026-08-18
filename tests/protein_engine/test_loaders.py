@@ -33,3 +33,12 @@ def test_missing_gene_columns_produce_empty_table(tmp_path) -> None:
     _write(p, "gene\n")
     table = load_essential_genes(p)
     assert table.matches({"gene": "x", "accession": "y"}) is False
+
+
+def test_missing_gene_columns_with_data_rows(tmp_path) -> None:
+    p = tmp_path / "wrong_cols.csv"
+    _write(p, "name,description\nspoA,sporulation protein\n")
+    table = load_essential_genes(p)
+    assert table.genes == frozenset()
+    assert table.accessions == frozenset()
+    assert table.matches({"gene": "spoA", "accession": "X"}) is False
