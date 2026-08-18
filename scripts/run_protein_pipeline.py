@@ -32,9 +32,14 @@ def _predict_species(image_path: Path) -> str:
         from bacteria_assistant.inference import predict_bacteria_image
     except ImportError as exc:
         raise ResolutionError("CV pipeline unavailable; use --species instead") from exc
+    model_path = PROJECT_ROOT / MODEL_PATH
+    if not model_path.exists():
+        raise ResolutionError(
+            f"model artifact not found: {model_path}  " "Run 'make train' first, or use --species instead."
+        )
     result = predict_bacteria_image(
         image_path=image_path,
-        model_path=PROJECT_ROOT / MODEL_PATH,
+        model_path=model_path,
         mode="basic",
     )
     name = result.get("predicted_bacteria_name")

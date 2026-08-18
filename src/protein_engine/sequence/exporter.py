@@ -32,6 +32,6 @@ def write(
         "selected_proteins": proteins,
         "excluded": excluded,
     }
-    (out / "proteins.json").write_text(json.dumps(payload, indent=2) + "\n")
-    (out / "sequences.fasta").write_text(to_fasta(proteins, resolved_name))
+    (out / "proteins.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    (out / "sequences.fasta").write_text(to_fasta(proteins, resolved_name), encoding="utf-8")
     return out

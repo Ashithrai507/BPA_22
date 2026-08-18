@@ -26,7 +26,7 @@ def score_terms(
 
 def compute_score(terms: dict, weights: dict | None = None) -> float:
     weights = weights or RANKING_WEIGHTS
-    return sum(weights[key] * terms[key] for key in weights)
+    return sum(weights[key] * terms.get(key, 0.0) for key in weights)
 
 
 def _scored(
