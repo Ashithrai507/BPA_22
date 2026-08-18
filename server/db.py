@@ -31,6 +31,20 @@ def init_db(db_path: Path) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS protein_analyses (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            prediction_id   INTEGER NOT NULL,
+            species         TEXT NOT NULL,
+            taxonomy_id     INTEGER,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            result_json     TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (prediction_id) REFERENCES predictions(id)
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -94,3 +108,32 @@ def list_predictions(db_path: Path, *, limit: int = 50, offset: int = 0) -> dict
     ).fetchall()
     conn.close()
     return {"total": total, "items": [dict(row) for row in rows]}
+
+
+def list_full_history(db_path: Path, *, limit: int = 50, offset: int = 0) -> dict:
+    conn = _connect(db_path)
+    total = conn.execute("SELECT COUNT(*) FROM predictions").fetchone()[0]
+    rows = conn.execute(
+        """
+        SELECT p.*,
+               CASE WHEN pa.id IS NOT NULL THEN 'complete'
+                    ELSE 'not_run'
+               END as protein_status
+        FROM predictions p
+        LEFT JOIN protein_analyses pa ON p.id = pa.prediction_id
+        ORDER BY p.id DESC
+        LIMIT ? OFFSET ?
+        """,
+        (limit, offset),
+    ).fetchall()
+    conn.close()
+    return {"total": total, "items": [dict(row) for row in rows]}
+
+
+def delete_prediction(db_path: Path, prediction_id: int) -> bool:
+    conn = _connect(db_path)
+    cursor = conn.execute("DELETE FROM predictions WHERE id = ?", (prediction_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted

@@ -22,6 +22,7 @@ class HistoryItem(BaseModel):
     filename: str
     predicted_species: str | None = None
     confidence: float | None = None
+    protein_status: str | None = None
 
 
 class HistoryResponse(BaseModel):

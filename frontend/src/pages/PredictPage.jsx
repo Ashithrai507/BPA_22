@@ -54,7 +54,9 @@ export default function PredictPage() {
             {history.map((h) => (
               <button key={h.id} onClick={() => loadHistory(h.id)} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex justify-between">
                 <span className="text-sm font-medium">{h.predicted_species || 'unknown'}</span>
-                <span className="text-xs text-gray-500">#{h.id} — {h.confidence?.toFixed(2) ?? '—'}</span>
+                <span className="text-xs text-gray-500">
+                  {h.protein_status === 'complete' ? '\u2705' : '\u2796'} #{h.id}
+                </span>
               </button>
             ))}
           </div>

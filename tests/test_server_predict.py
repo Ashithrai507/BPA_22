@@ -10,8 +10,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from server.db import init_db
+from server.dependencies import get_db_path
 from server.main import app
 
+init_db(get_db_path())
 client = TestClient(app)
 
 FAKE_RESULT = {

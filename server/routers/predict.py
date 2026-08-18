@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from bacteria_assistant.inference import predict_bacteria_image
 
-from ..db import get_prediction, insert_prediction, list_predictions
+from ..db import delete_prediction, get_prediction, insert_prediction, list_full_history
 from ..dependencies import get_db_path
 from ..models import HistoryResponse, PredictResponse
 
@@ -66,7 +66,7 @@ async def predict(
 @router.get("/history", response_model=HistoryResponse)
 def history(limit: int = 50, offset: int = 0) -> HistoryResponse:
     db_path = get_db_path()
-    data = list_predictions(db_path, limit=limit, offset=offset)
+    data = list_full_history(db_path, limit=limit, offset=offset)
     return HistoryResponse(
         total=data["total"],
         items=[
@@ -76,10 +76,20 @@ def history(limit: int = 50, offset: int = 0) -> HistoryResponse:
                 "filename": i["filename"],
                 "predicted_species": i["predicted_species"],
                 "confidence": i["confidence"],
+                "protein_status": i["protein_status"],
             }
             for i in data["items"]
         ],
     )
+
+
+@router.delete("/{prediction_id}")
+def delete_prediction_by_id(prediction_id: int) -> dict:
+    db_path = get_db_path()
+    deleted = delete_prediction(db_path, prediction_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Prediction not found")
+    return {"status": "deleted", "id": prediction_id}
 
 
 @router.get("/{prediction_id}", response_model=PredictResponse)

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import PredictPage from './pages/PredictPage';
 import ProteinPage from './pages/ProteinPage';
+import HistoryPage from './pages/HistoryPage';
 
 export default function App() {
   return (
@@ -15,12 +16,16 @@ export default function App() {
             <NavLink to="/proteins" className={({ isActive }) => `px-3 py-1 rounded ${isActive ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-600 hover:text-gray-900'}`}>
               Protein Ranking
             </NavLink>
+            <NavLink to="/history" className={({ isActive }) => `px-3 py-1 rounded ${isActive ? 'bg-blue-100 text-blue-800 font-semibold' : 'text-gray-600 hover:text-gray-900'}`}>
+              History
+            </NavLink>
           </div>
         </nav>
         <main className="max-w-7xl mx-auto px-4 py-6">
           <Routes>
             <Route path="/" element={<PredictPage />} />
             <Route path="/proteins" element={<ProteinPage />} />
+            <Route path="/history" element={<HistoryPage />} />
           </Routes>
         </main>
       </div>
