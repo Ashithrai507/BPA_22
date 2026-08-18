@@ -138,3 +138,43 @@ def delete_prediction(db_path: Path, prediction_id: int) -> bool:
     deleted = cursor.rowcount > 0
     conn.close()
     return deleted
+
+
+def insert_protein_analysis(
+    db_path: Path,
+    *,
+    prediction_id: int,
+    species: str,
+    taxonomy_id: int | None,
+    status: str,
+    result_json: dict | None,
+) -> int:
+    conn = _connect(db_path)
+    cursor = conn.execute(
+        """
+        INSERT INTO protein_analyses (prediction_id, species, taxonomy_id, status, result_json)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (prediction_id, species, taxonomy_id, status, json.dumps(result_json) if result_json else None),
+    )
+    conn.commit()
+    row_id = cursor.lastrowid
+    conn.close()
+    return row_id
+
+
+def list_protein_analyses(db_path: Path, *, limit: int = 50, offset: int = 0) -> dict:
+    conn = _connect(db_path)
+    total = conn.execute("SELECT COUNT(*) FROM protein_analyses").fetchone()[0]
+    rows = conn.execute(
+        """
+        SELECT pa.*, p.filename, p.predicted_species as image_species
+        FROM protein_analyses pa
+        JOIN predictions p ON pa.prediction_id = p.id
+        ORDER BY pa.id DESC
+        LIMIT ? OFFSET ?
+        """,
+        (limit, offset),
+    ).fetchall()
+    conn.close()
+    return {"total": total, "items": [dict(row) for row in rows]}
