@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/predict", tags=["predict"])
 
 @router.post("", response_model=PredictResponse)
 async def predict(
-    image: UploadFile = File(...),
+    image: UploadFile = File(...),  # noqa: B008
     mode: str = Form("advanced"),
 ) -> PredictResponse:
     image_bytes = await image.read()
@@ -70,8 +70,13 @@ def history(limit: int = 50, offset: int = 0) -> HistoryResponse:
     return HistoryResponse(
         total=data["total"],
         items=[
-            {"id": i["id"], "created_at": i["created_at"], "filename": i["filename"],
-             "predicted_species": i["predicted_species"], "confidence": i["confidence"]}
+            {
+                "id": i["id"],
+                "created_at": i["created_at"],
+                "filename": i["filename"],
+                "predicted_species": i["predicted_species"],
+                "confidence": i["confidence"],
+            }
             for i in data["items"]
         ],
     )
@@ -85,9 +90,14 @@ def get_prediction_by_id(prediction_id: int) -> PredictResponse:
         raise HTTPException(status_code=404, detail="Prediction not found")
     result = json.loads(row["result_json"])
     return PredictResponse(
-        id=row["id"], created_at=row["created_at"],
-        organism_type=row["organism_type"], predicted_species=row["predicted_species"],
-        gram=row["gram"], total_colonies=row["total_colonies"],
-        dominant_shape=row["dominant_shape"], confidence=row["confidence"],
-        colonies=result.get("colonies"), morphology=result.get("final_morphology"),
+        id=row["id"],
+        created_at=row["created_at"],
+        organism_type=row["organism_type"],
+        predicted_species=row["predicted_species"],
+        gram=row["gram"],
+        total_colonies=row["total_colonies"],
+        dominant_shape=row["dominant_shape"],
+        confidence=row["confidence"],
+        colonies=result.get("colonies"),
+        morphology=result.get("final_morphology"),
     )

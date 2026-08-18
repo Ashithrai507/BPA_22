@@ -58,8 +58,16 @@ def insert_prediction(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            filename, image_bytes, mode, organism_type, predicted_species,
-            gram, total_colonies, dominant_shape, confidence, json.dumps(result_json),
+            filename,
+            image_bytes,
+            mode,
+            organism_type,
+            predicted_species,
+            gram,
+            total_colonies,
+            dominant_shape,
+            confidence,
+            json.dumps(result_json),
         ),
     )
     conn.commit()

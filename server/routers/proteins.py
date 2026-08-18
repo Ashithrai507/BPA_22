@@ -10,9 +10,9 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from bacteria_assistant.config import ORGANISM_METADATA
+from bacteria_assistant.config import ORGANISM_METADATA  # noqa: E402
 
-from ..models import ProteinRequest, ProteinResponse, SpeciesInfo
+from ..models import ProteinRequest, ProteinResponse, SpeciesInfo  # noqa: E402
 
 router = APIRouter(prefix="/api", tags=["proteins"])
 

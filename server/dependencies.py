@@ -8,8 +8,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from bacteria_assistant.config import MODEL_PATH
-from bacteria_assistant.inference import load_models
+from bacteria_assistant.config import MODEL_PATH  # noqa: E402
+from bacteria_assistant.inference import load_models  # noqa: E402
 
 _models: dict | None = None
 
