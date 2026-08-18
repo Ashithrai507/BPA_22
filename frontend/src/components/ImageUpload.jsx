@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function ImageUpload({ onResult, onLoading }) {
   const [preview, setPreview] = useState(null);
   const [file, setFile] = useState(null);
 
+  useEffect(() => {
+    return () => { if (preview) URL.revokeObjectURL(preview); };
+  }, [preview]);
+
   const handleFile = (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    if (preview) URL.revokeObjectURL(preview);
     setFile(f);
     setPreview(URL.createObjectURL(f));
   };
@@ -15,6 +20,7 @@ export default function ImageUpload({ onResult, onLoading }) {
     e.preventDefault();
     const f = e.dataTransfer.files[0];
     if (!f) return;
+    if (preview) URL.revokeObjectURL(preview);
     setFile(f);
     setPreview(URL.createObjectURL(f));
   };

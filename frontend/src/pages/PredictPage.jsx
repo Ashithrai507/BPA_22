@@ -25,7 +25,7 @@ export default function PredictPage() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-800">Image Analysis</h2>
 
-      <ImageUpload onResult={(r) => { setResult(r); api.get('/predict/history?limit=10').then((r) => setHistory(r.data.items)); }} onLoading={setLoading} />
+      <ImageUpload onResult={(r) => { setResult(r); api.get('/predict/history?limit=10').then((r) => setHistory(r.data.items)).catch(() => {}); }} onLoading={setLoading} />
 
       {loading && <p className="text-blue-600">Analyzing...</p>}
 
