@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from bacteria_assistant.config import ORGANISM_METADATA  # noqa: E402
 from ..dependencies import get_db_path
 from ..models import ProteinRequest, ProteinResponse, SpeciesInfo  # noqa: E402
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["proteins"])
 
 
@@ -59,7 +61,18 @@ async def rank_proteins_batch(species_list: list[str], top_n: int = 10) -> list[
                 resolved_name=result["resolved_name"], source=result["source"],
                 selected_proteins=result["selected_proteins"], excluded=result.get("excluded", []),
             ))
+            from ..db import insert_protein_analysis
+            db_path = get_db_path()
+            insert_protein_analysis(
+                db_path,
+                prediction_id=0,
+                species=result["species"],
+                taxonomy_id=result["taxonomy_id"],
+                status="completed",
+                result_json=result,
+            )
         except Exception:
+            logger.warning("Batch analysis failed for species=%s", species, exc_info=True)
             results.append(ProteinResponse(
                 species=species, taxonomy_id=0, resolved_name=species,
                 source="error", selected_proteins=[], excluded=[],
