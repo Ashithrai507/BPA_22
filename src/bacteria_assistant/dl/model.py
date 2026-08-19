@@ -7,6 +7,19 @@ from torch import nn
 from torchvision import models
 
 
+class LabelSmoothingCrossEntropy(nn.Module):
+    def __init__(self, smoothing=0.1):
+        super().__init__()
+        self.smoothing = smoothing
+
+    def forward(self, pred, target):
+        log_pred = torch.log_softmax(pred, dim=-1)
+        nll_loss = -log_pred.gather(dim=-1, index=target.unsqueeze(1)).squeeze(1)
+        smooth_loss = -log_pred.mean(dim=-1)
+        loss = (1.0 - self.smoothing) * nll_loss + self.smoothing * smooth_loss
+        return loss.mean()
+
+
 def _pooled_feature_dim(backbone_name: str) -> int:
     dims = {
         "efficientnet_b0": 1280,

@@ -6,10 +6,46 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import torchvision.transforms as transforms
 from sklearn.model_selection import train_test_split
 
 from .dataset import ImageDataset
 from .losses import CombinedLoss
+
+
+def get_augmentation_transforms():
+    return transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.RandomRotation(20),
+        transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
+        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+        transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.RandomErasing(p=0.2, scale=(0.02, 0.1)),
+    ])
+
+
+def predict_with_tta(model, image_tensor, n_augmentations=5):
+    """Test-time augmentation: average predictions over augmented versions."""
+    model.eval()
+    predictions = []
+
+    base_transform = get_augmentation_transforms()
+
+    from torchvision.transforms.functional import to_pil_image
+
+    with torch.no_grad():
+        for _ in range(n_augmentations):
+            pil_img = to_pil_image(image_tensor)
+            augmented = base_transform(pil_img)
+            augmented = augmented.unsqueeze(0)
+            output = model(augmented)
+            predictions.append(torch.softmax(output["logits"]["species"], dim=1))
+
+    avg_predictions = torch.stack(predictions).mean(dim=0)
+    return avg_predictions
 
 
 @dataclass
