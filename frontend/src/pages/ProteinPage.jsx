@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import SpeciesSelector from '../components/SpeciesSelector';
 import ProteinTable from '../components/ProteinTable';
 import FastaDownload from '../components/FastaDownload';
 import api from '../api';
 
 export default function ProteinPage() {
+  const location = useLocation();
   const [species, setSpecies] = useState('');
   const [topN, setTopN] = useState(10);
   const [result, setResult] = useState(null);
@@ -64,6 +66,20 @@ export default function ProteinPage() {
   useEffect(() => {
     if (showHistory) loadHistory(historyPage);
   }, [showHistory, historyPage]);
+
+  useEffect(() => {
+    const incoming = location.state?.species;
+    if (incoming) {
+      setSpecies(incoming);
+      setShowHistory(false);
+      setBatchMode(false);
+
+      api.post('/proteins', { species: incoming, top_n: topN })
+        .then((resp) => setResult(resp.data))
+        .catch((err) => setError(err.response?.data?.detail || err.message))
+        .finally(() => setLoading(false));
+    }
+  }, [location.state]);
 
   const historyPages = Math.ceil(historyTotal / pageSize);
 

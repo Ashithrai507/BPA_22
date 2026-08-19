@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ImageUpload from '../components/ImageUpload';
 import ResultsPanel from '../components/ResultsPanel';
 import ResultsTable from '../components/ResultsTable';
@@ -9,6 +10,7 @@ export default function PredictPage() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [showJson, setShowJson] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     api.get('/predict/history?limit=10').then((r) => setHistory(r.data.items)).catch(() => {});
@@ -34,16 +36,23 @@ export default function PredictPage() {
           <ResultsPanel result={result} />
           <ResultsTable colonies={result.colonies} />
 
-          <div>
+          <div className="flex items-center gap-3">
             <button onClick={() => setShowJson(!showJson)} className="text-sm text-blue-600 hover:underline">
               {showJson ? 'Hide' : 'Show'} Raw JSON
             </button>
-            {showJson && (
-              <pre className="mt-2 bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-auto max-h-96">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            )}
+            <button
+              onClick={() => navigate('/proteins', { state: { species: result.predicted_species } })}
+              className="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700 font-semibold text-sm"
+            >
+              Protein Analysis
+            </button>
           </div>
+
+          {showJson && (
+            <pre className="mt-2 bg-gray-900 text-green-400 p-4 rounded-lg text-xs overflow-auto max-h-96">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          )}
         </>
       )}
 
