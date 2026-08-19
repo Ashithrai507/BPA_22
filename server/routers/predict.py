@@ -57,7 +57,7 @@ async def predict(
         gram=result.get("bacteria_type"),
         total_colonies=result.get("total_colonies_detected") or result.get("total_colonies"),
         dominant_shape=result.get("dominant_shape"),
-        confidence=result.get("confidence"),
+        confidence=result.get("confidence") or (result.get("final_morphology") or {}).get("confidence"),
         colonies=result.get("colonies"),
         morphology=result.get("final_morphology"),
     )
