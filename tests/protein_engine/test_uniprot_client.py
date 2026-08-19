@@ -16,8 +16,10 @@ def _result(accession: str, gene: str) -> dict:
         "proteinDescription": {"recommendedName": {"fullName": {"value": f"{gene} protein"}}},
         "genes": [{"geneName": {"value": gene}}],
         "sequence": {"value": "M" * 100, "length": 100},
-        "comments": [{"commentType": "FUNCTION", "texts": [{"value": "does things"}]}],
-        "subcellularLocations": [{"location": {"value": "Cytoplasm"}}],
+        "comments": [
+            {"commentType": "FUNCTION", "texts": [{"value": "does things"}]},
+            {"commentType": "SUBCELLULAR LOCATION", "subcellularLocations": [{"location": {"value": "Cytoplasm"}}]},
+        ],
         "uniProtKBCrossReferences": [{"database": "PDB", "id": "1FSE"}],
         "keywords": [{"name": "Sporulation"}],
     }

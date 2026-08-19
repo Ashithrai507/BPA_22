@@ -48,10 +48,13 @@ def normalize(result: dict, reviewed: bool) -> dict:
             gene = value
             break
     subcellular = None
-    for loc in result.get("subcellularLocations") or []:
-        subcellular = (loc.get("location") or {}).get("value")
-        if subcellular:
-            break
+    for loc in result.get("comments") or []:
+        if loc.get("commentType") == "SUBCELLULAR LOCATION":
+            locations = loc.get("subcellularLocations") or []
+            if locations:
+                subcellular = (locations[0].get("location") or {}).get("value")
+                if subcellular:
+                    break
     function = None
     for comment in result.get("comments") or []:
         if comment.get("commentType") == "FUNCTION" and comment.get("texts"):

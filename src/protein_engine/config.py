@@ -31,7 +31,7 @@ PDB_UNIPROT = "https://data.rcsb.org/rest/v1/core/uniprot"
 
 UNIPROT_FIELDS = (
     "accession,reviewed,protein_name,gene_names,length,sequence,"
-    "cc_function,subcellular_location,xref_pdb,xref_alphafold"
+    "cc_function,cc_subcellular_location,xref_pdb"
 )
 REVIEWED_MIN_COUNT = 10
 MIN_SEQUENCE_LENGTH = 20
