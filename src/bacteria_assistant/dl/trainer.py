@@ -314,6 +314,7 @@ def train_kfold(
         )
 
         history: dict[str, list[float]] = {"loss": [], "val_acc_species": []}
+        best_val_acc = -1.0
 
         for epoch in range(config.epochs):
             if epoch == config.frozen_epochs and hasattr(fold_model, "unfreeze_backbone"):
@@ -339,7 +340,8 @@ def train_kfold(
             if scheduler is not None:
                 scheduler.step()
 
-            if checkpoint_dir is not None:
+            if checkpoint_dir is not None and val_acc > best_val_acc:
+                best_val_acc = val_acc
                 ckpt_path = checkpoint_dir / f"fold_{fold}.pt"
                 torch.save(fold_model.state_dict(), ckpt_path)
 
@@ -434,7 +436,10 @@ def _model_init_kwargs(model: torch.nn.Module) -> list[tuple[str, Any]]:
             ("num_grams", model.gram_head.out_features),
             ("num_types", model.type_head.out_features),
         ]
-    return []
+    raise ValueError(
+        f"Unsupported model type {type(model).__name__}: expected a model with "
+        f"'backbone_name' and 'species_head' attributes for k-fold model cloning"
+    )
 
 
 def checkpoint_signature(checkpoint_path: Path) -> str:

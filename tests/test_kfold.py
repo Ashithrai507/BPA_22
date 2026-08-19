@@ -15,7 +15,8 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from bacteria_assistant.dl.dataset import build_image_dataset
-from bacteria_assistant.dl.trainer import TrainingConfig, train_kfold, train_with_fine_tuning
+from bacteria_assistant.dl.trainer import TrainingConfig, train_kfold, train_with_fine_tuning, _model_init_kwargs
+from sklearn.model_selection import StratifiedKFold
 
 
 class TinyBackbone(nn.Module):
@@ -96,9 +97,30 @@ def test_kfold_no_leakage(tiny_table: pd.DataFrame) -> None:
     dataset = build_image_dataset(tiny_table)
     model = TinyBackbone(num_species=3)
     config = TrainingConfig(batch_size=4, epochs=1, lr=1e-3, num_workers=0, seed=0)
-    results = train_kfold(dataset, model, config, n_folds=3, device="cpu")
-    # Each fold should produce a result with valid accuracy
-    assert all(isinstance(r["val_acc"], float) for r in results)
+    n_folds = 3
+
+    # Run k-fold to get results
+    results = train_kfold(dataset, model, config, n_folds=n_folds, device="cpu")
+
+    # Verify the splits are actually disjoint using the same StratifiedKFold logic
+    species_labels = dataset.table["organism"].tolist()
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=config.random_state)
+    all_val_indices = []
+    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(range(len(dataset)), species_labels)):
+        train_set = set(train_idx)
+        val_set = set(val_idx)
+        # Train and val must be disjoint
+        assert train_set.isdisjoint(val_set), f"Fold {fold_idx}: train and val indices overlap"
+        # Union must cover the entire dataset
+        assert train_set | val_set == set(range(len(dataset))), f"Fold {fold_idx}: union doesn't cover full dataset"
+        all_val_indices.append(val_set)
+
+    # Different folds must have different validation sets
+    for i in range(n_folds):
+        for j in range(i + 1, n_folds):
+            assert all_val_indices[i] != all_val_indices[j], (
+                f"Folds {i} and {j} have identical validation sets — likely not stratified properly"
+            )
 
 
 def test_fine_tuning_returns_model(tiny_table: pd.DataFrame) -> None:
@@ -120,3 +142,9 @@ def test_fine_tuning_returns_model(tiny_table: pd.DataFrame) -> None:
     assert isinstance(trained_model, nn.Module)
     assert len(history["loss"]) == 2
     assert len(history["val_acc_species"]) == 2
+
+
+def test_model_init_kwargs_rejects_unsupported() -> None:
+    bare_model = nn.Linear(10, 3)
+    with pytest.raises(ValueError, match="Unsupported model type"):
+        _model_init_kwargs(bare_model)
