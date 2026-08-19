@@ -7,7 +7,7 @@ from typing import Any
 
 import torch
 import torchvision.transforms as transforms
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from .dataset import ImageDataset
 from .losses import CombinedLoss
@@ -240,6 +240,201 @@ def _evaluate_species(
             correct += (preds.cpu() == targets["species"]).sum().item()
             total += imgs.size(0)
     return correct / max(total, 1)
+
+
+def train_kfold(
+    dataset: ImageDataset,
+    model: torch.nn.Module,
+    config: TrainingConfig,
+    n_folds: int = 5,
+    checkpoint_dir: Path | None = None,
+    device: str | None = None,
+) -> list[dict[str, Any]]:
+    """Train with stratified k-fold cross-validation.
+
+    Returns a list of dicts, one per fold, each containing:
+      - fold: fold index
+      - train_acc: final training species accuracy
+      - val_acc: final validation species accuracy
+      - history: per-epoch loss and val_acc_species lists
+    """
+    device = device or get_device()
+    species_labels = dataset.table["organism"].tolist()
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=config.random_state)
+
+    fold_results: list[dict[str, Any]] = []
+
+    for fold, (train_idx, val_idx) in enumerate(skf.split(range(len(dataset)), species_labels)):
+        print(f"Fold {fold + 1}/{n_folds}")
+
+        train_subset = dataset.subset(list(train_idx))
+        val_subset = dataset.subset(list(val_idx))
+
+        from .transforms import inference_transform, train_transform
+
+        if config.augment:
+            train_subset = train_subset.with_transform(
+                train_transform(seed=config.seed, input_size=config.input_size)
+            )
+        else:
+            train_subset = train_subset.with_transform(inference_transform(config.input_size))
+        val_subset = val_subset.with_transform(inference_transform(config.input_size))
+
+        train_loader = torch.utils.data.DataLoader(
+            train_subset,
+            batch_size=config.batch_size,
+            shuffle=True,
+            num_workers=config.num_workers,
+            collate_fn=_collate,
+        )
+        val_loader = torch.utils.data.DataLoader(
+            val_subset,
+            batch_size=config.batch_size,
+            shuffle=False,
+            num_workers=config.num_workers,
+            collate_fn=_collate,
+        )
+
+        fold_model = type(model)(**{k: v for k, v in _model_init_kwargs(model)})
+        fold_model = fold_model.to(device)
+
+        if config.frozen_epochs > 0 and hasattr(fold_model, "freeze_backbone"):
+            fold_model.freeze_backbone()
+
+        criterion = CombinedLoss(
+            aux_weight=config.aux_weight,
+            contrastive_weight=config.contrastive_weight,
+            temperature=config.temperature,
+        )
+        optimizer = torch.optim.AdamW(fold_model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+        scheduler = (
+            torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max(config.epochs - config.frozen_epochs, 1))
+            if config.use_scheduler
+            else None
+        )
+
+        history: dict[str, list[float]] = {"loss": [], "val_acc_species": []}
+
+        for epoch in range(config.epochs):
+            if epoch == config.frozen_epochs and hasattr(fold_model, "unfreeze_backbone"):
+                fold_model.unfreeze_backbone()
+            fold_model.train()
+            total_loss = 0.0
+            n_batches = 0
+            for imgs, targets in train_loader:
+                imgs = imgs.to(device)
+                targets = {k: v.to(device) for k, v in targets.items()}
+                optimizer.zero_grad()
+                out = fold_model(imgs)
+                loss, _ = criterion(out["logits"], targets, out["embeddings"])
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+                n_batches += 1
+
+            train_loss = total_loss / max(n_batches, 1)
+            val_acc = _evaluate_species(fold_model, val_loader, device)
+            history["loss"].append(train_loss)
+            history["val_acc_species"].append(val_acc)
+            if scheduler is not None:
+                scheduler.step()
+
+            if checkpoint_dir is not None:
+                ckpt_path = checkpoint_dir / f"fold_{fold}.pt"
+                torch.save(fold_model.state_dict(), ckpt_path)
+
+        train_acc = _evaluate_species(fold_model, train_loader, device)
+        fold_results.append({
+            "fold": fold,
+            "train_acc": train_acc,
+            "val_acc": history["val_acc_species"][-1],
+            "history": history,
+        })
+
+    return fold_results
+
+
+def train_with_fine_tuning(
+    model: torch.nn.Module,
+    train_loader: torch.utils.data.DataLoader,
+    val_loader: torch.utils.data.DataLoader,
+    config: TrainingConfig,
+    device: str | None = None,
+    unfreeze_after_epoch: int = 5,
+) -> tuple[torch.nn.Module, dict[str, list[float]]]:
+    """Fine-tune with discriminative learning rates.
+
+    Backbone parameters get a lower learning rate; head parameters get the
+    normal learning rate. After ``unfreeze_after_epoch`` the backbone is
+    unfrozen (if it was frozen) and all params use the normal LR.
+
+    Returns (model, history).
+    """
+    device = device or get_device()
+    model = model.to(device)
+
+    backbone_params = [p for n, p in model.named_parameters() if "backbone" in n]
+    head_params = [p for n, p in model.named_parameters() if "backbone" not in n]
+
+    backbone_lr = config.lr * 0.01
+    optimizer = torch.optim.AdamW([
+        {"params": backbone_params, "lr": backbone_lr},
+        {"params": head_params, "lr": config.lr},
+    ], weight_decay=config.weight_decay)
+
+    criterion = CombinedLoss(
+        aux_weight=config.aux_weight,
+        contrastive_weight=config.contrastive_weight,
+        temperature=config.temperature,
+    )
+    scheduler = (
+        torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+        if config.use_scheduler
+        else None
+    )
+
+    history: dict[str, list[float]] = {"loss": [], "val_acc_species": []}
+
+    for epoch in range(config.epochs):
+        if epoch == unfreeze_after_epoch and hasattr(model, "unfreeze_backbone"):
+            model.unfreeze_backbone()
+
+        model.train()
+        total_loss = 0.0
+        n_batches = 0
+        for imgs, targets in train_loader:
+            imgs = imgs.to(device)
+            targets = {k: v.to(device) for k, v in targets.items()}
+            optimizer.zero_grad()
+            out = model(imgs)
+            loss, _ = criterion(out["logits"], targets, out["embeddings"])
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            n_batches += 1
+
+        train_loss = total_loss / max(n_batches, 1)
+        val_acc = _evaluate_species(model, val_loader, device)
+        history["loss"].append(train_loss)
+        history["val_acc_species"].append(val_acc)
+        if scheduler is not None:
+            scheduler.step()
+
+    return model, history
+
+
+def _model_init_kwargs(model: torch.nn.Module) -> list[tuple[str, Any]]:
+    """Extract constructor kwargs from a model for creating fold copies."""
+    if hasattr(model, "backbone_name") and hasattr(model, "species_head"):
+        return [
+            ("backbone_name", model.backbone_name),
+            ("pretrained", False),
+            ("num_species", model.species_head.out_features),
+            ("num_groups", model.group_head.out_features),
+            ("num_grams", model.gram_head.out_features),
+            ("num_types", model.type_head.out_features),
+        ]
+    return []
 
 
 def checkpoint_signature(checkpoint_path: Path) -> str:
