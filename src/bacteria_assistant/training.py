@@ -5,15 +5,17 @@ import json
 from pathlib import Path
 from typing import Any
 
+import cv2
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, VotingClassifier
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, classification_report
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 from .config import (
     AUGMENT_PER_IMAGE,
@@ -50,6 +52,43 @@ def _resolve_image_path(workspace_root: Path, image_path: str) -> Path:
         return path_obj
 
     raise FileNotFoundError(f"Image path does not exist: {image_path}")
+
+
+def extract_color_features(image_path):
+    """Extract RGB and HSV color histogram features."""
+    img = cv2.imread(str(image_path))
+    if img is None:
+        return {}
+    
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    
+    features = {}
+    for i, channel in enumerate(['b', 'g', 'r']):
+        hist = cv2.calcHist([img], [i], None, [32], [0, 256])
+        features[f'{channel}_mean'] = np.mean(hist)
+        features[f'{channel}_std'] = np.std(hist)
+    
+    for i, channel in enumerate(['h', 's', 'v']):
+        hist = cv2.calcHist([hsv], [i], None, [32], [0, 256])
+        features[f'{channel}_mean'] = np.mean(hist)
+        features[f'{channel}_std'] = np.std(hist)
+    
+    return features
+
+
+def train_ensemble(X_train, y_train):
+    """Train ensemble of top 3 classical models."""
+    rf = RandomForestClassifier(n_estimators=200, random_state=42)
+    et = ExtraTreesClassifier(n_estimators=200, random_state=42)
+    svm = SVC(kernel='rbf', probability=True, random_state=42)
+    
+    ensemble = VotingClassifier(
+        estimators=[('rf', rf), ('et', et), ('svm', svm)],
+        voting='soft'
+    )
+    
+    ensemble.fit(X_train, y_train)
+    return ensemble
 
 
 def _load_labeled_dataframe(dataset_csv: Path) -> pd.DataFrame:
