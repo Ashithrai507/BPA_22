@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 import torchvision.transforms as transforms
@@ -27,12 +27,22 @@ def get_augmentation_transforms():
     ])
 
 
+def get_tta_transforms():
+    return transforms.Compose([
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation(10),
+        transforms.ColorJitter(brightness=0.1, contrast=0.1),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+
 def predict_with_tta(model, image_tensor, n_augmentations=5):
     """Test-time augmentation: average predictions over augmented versions."""
     model.eval()
     predictions = []
 
-    base_transform = get_augmentation_transforms()
+    base_transform = get_tta_transforms()
 
     from torchvision.transforms.functional import to_pil_image
 
@@ -117,7 +127,7 @@ def fit_embedding_model(
     dataset: ImageDataset,
     config: TrainingConfig,
     checkpoint_path: Path,
-    device: str | None = None,
+    device: Optional[str] = None,
 ) -> tuple[dict[str, list[float]], dict[str, Any]]:
     """Train the embedding model and save a checkpoint.
 
@@ -247,8 +257,8 @@ def train_kfold(
     model: torch.nn.Module,
     config: TrainingConfig,
     n_folds: int = 5,
-    checkpoint_dir: Path | None = None,
-    device: str | None = None,
+    checkpoint_dir: Optional[Path] = None,
+    device: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Train with stratified k-fold cross-validation.
 
@@ -361,7 +371,7 @@ def train_with_fine_tuning(
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
     config: TrainingConfig,
-    device: str | None = None,
+    device: Optional[str] = None,
     unfreeze_after_epoch: int = 5,
 ) -> tuple[torch.nn.Module, dict[str, list[float]]]:
     """Fine-tune with discriminative learning rates.

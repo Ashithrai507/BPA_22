@@ -65,3 +65,19 @@ def test_get_prediction_by_id(mock_predict) -> None:
 def test_get_prediction_404_for_nonexistent_id() -> None:
     resp = client.get("/api/predict/99999")
     assert resp.status_code == 404
+
+
+@patch("server.routers.predict.predict_bacteria_image", return_value=FAKE_RESULT)
+def test_delete_prediction(mock_predict) -> None:
+    resp = client.post("/api/predict", files={"image": ("t.png", _FAKE_PNG, "image/png")}, data={"mode": "basic"})
+    pred_id = resp.json()["id"]
+    delete_resp = client.delete(f"/api/predict/{pred_id}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["status"] == "deleted"
+    get_resp = client.get(f"/api/predict/{pred_id}")
+    assert get_resp.status_code == 404
+
+
+def test_delete_nonexistent_returns_404() -> None:
+    resp = client.delete("/api/predict/99999")
+    assert resp.status_code == 404

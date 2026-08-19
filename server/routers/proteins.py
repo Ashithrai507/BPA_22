@@ -61,16 +61,6 @@ async def rank_proteins_batch(species_list: list[str], top_n: int = 10) -> list[
                 resolved_name=result["resolved_name"], source=result["source"],
                 selected_proteins=result["selected_proteins"], excluded=result.get("excluded", []),
             ))
-            from ..db import insert_protein_analysis
-            db_path = get_db_path()
-            insert_protein_analysis(
-                db_path,
-                prediction_id=0,
-                species=result["species"],
-                taxonomy_id=result["taxonomy_id"],
-                status="completed",
-                result_json=result,
-            )
         except Exception:
             logger.warning("Batch analysis failed for species=%s", species, exc_info=True)
             results.append(ProteinResponse(

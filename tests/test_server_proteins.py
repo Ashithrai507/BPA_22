@@ -57,3 +57,31 @@ def test_rank_proteins(mock_run) -> None:
     assert body["species"] == "Bacillus subtilis"
     assert len(body["selected_proteins"]) == 1
     assert body["selected_proteins"][0]["accession"] == "P37476"
+
+
+@patch("protein_engine.pipeline.run", return_value=FAKE_PROTEIN_RESULT)
+def test_batch_proteins(mock_run) -> None:
+    resp = client.post(
+        "/api/proteins/batch",
+        json=["Bacillus subtilis", "Escherichia coli"],
+        params={"top_n": 5},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+    assert body[0]["species"] == "Bacillus subtilis"
+    assert body[1]["species"] == "Bacillus subtilis"
+
+
+@patch("protein_engine.pipeline.run", side_effect=Exception("boom"))
+def test_batch_proteins_handles_failure(mock_run) -> None:
+    resp = client.post(
+        "/api/proteins/batch",
+        json=["Bacillus subtilis"],
+        params={"top_n": 5},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["source"] == "error"
+    assert body[0]["selected_proteins"] == []

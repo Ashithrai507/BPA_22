@@ -5,11 +5,16 @@ import torch
 from torchvision import transforms
 
 from bacteria_assistant.dl.model import LabelSmoothingCrossEntropy
-from bacteria_assistant.dl.trainer import get_augmentation_transforms, predict_with_tta
+from bacteria_assistant.dl.trainer import get_augmentation_transforms, get_tta_transforms, predict_with_tta
 
 
 def test_augmentation_transforms():
     transform = get_augmentation_transforms()
+    assert isinstance(transform, transforms.Compose)
+
+
+def test_tta_transforms():
+    transform = get_tta_transforms()
     assert isinstance(transform, transforms.Compose)
 
 

@@ -83,15 +83,6 @@ def history(limit: int = 50, offset: int = 0) -> HistoryResponse:
     )
 
 
-@router.delete("/{prediction_id}")
-def delete_prediction_by_id(prediction_id: int) -> dict:
-    db_path = get_db_path()
-    deleted = delete_prediction(db_path, prediction_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Prediction not found")
-    return {"status": "deleted", "id": prediction_id}
-
-
 @router.get("/{prediction_id}", response_model=PredictResponse)
 def get_prediction_by_id(prediction_id: int) -> PredictResponse:
     db_path = get_db_path()
@@ -111,3 +102,12 @@ def get_prediction_by_id(prediction_id: int) -> PredictResponse:
         colonies=result.get("colonies"),
         morphology=result.get("final_morphology"),
     )
+
+
+@router.delete("/{prediction_id}")
+def delete_prediction_by_id(prediction_id: int) -> dict:
+    db_path = get_db_path()
+    deleted = delete_prediction(db_path, prediction_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Prediction not found")
+    return {"status": "deleted", "id": prediction_id}

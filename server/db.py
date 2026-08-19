@@ -116,11 +116,15 @@ def list_full_history(db_path: Path, *, limit: int = 50, offset: int = 0) -> dic
     rows = conn.execute(
         """
         SELECT p.*,
-               CASE WHEN pa.id IS NOT NULL THEN 'complete'
+               CASE WHEN latest_pa.id IS NOT NULL THEN 'complete'
                     ELSE 'not_run'
                END as protein_status
         FROM predictions p
-        LEFT JOIN protein_analyses pa ON p.id = pa.prediction_id
+        LEFT JOIN (
+            SELECT prediction_id, MAX(id) AS id
+            FROM protein_analyses
+            GROUP BY prediction_id
+        ) latest_pa ON p.id = latest_pa.prediction_id
         ORDER BY p.id DESC
         LIMIT ? OFFSET ?
         """,
