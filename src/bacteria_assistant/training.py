@@ -54,7 +54,7 @@ def _resolve_image_path(workspace_root: Path, image_path: str) -> Path:
     raise FileNotFoundError(f"Image path does not exist: {image_path}")
 
 
-def extract_color_features(image_path):
+def extract_color_features(image_path: Path) -> dict[str, float]:
     """Extract RGB and HSV color histogram features."""
     img = cv2.imread(str(image_path))
     if img is None:
@@ -76,7 +76,7 @@ def extract_color_features(image_path):
     return features
 
 
-def train_ensemble(X_train, y_train):
+def train_ensemble(X_train: pd.DataFrame, y_train: pd.Series) -> VotingClassifier:
     """Train ensemble of top 3 classical models."""
     rf = RandomForestClassifier(n_estimators=200, random_state=42)
     et = ExtraTreesClassifier(n_estimators=200, random_state=42)
