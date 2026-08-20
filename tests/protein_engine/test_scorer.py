@@ -52,3 +52,10 @@ def test_preselect_excludes_structure_term() -> None:
     proteins = [_protein("P37476", "spoA", True)]
     selected = preselect(proteins, curated=_tables(), limit=10)
     assert selected[0]["score"] == 0.45  # 0.30 essential + 0.15 evidence, no structure
+
+
+def test_compute_score_ignores_unknown_weight_keys() -> None:
+    terms = {"essential": 1.0, "virulence": 0.0, "resistance": 0.0, "evidence": 1.0, "structure": 0.0}
+    custom_weights = {"essential": 0.5, "evidence": 0.5, "unknown_term": 0.99}
+    score = compute_score(terms, weights=custom_weights)
+    assert score == pytest.approx(1.0)

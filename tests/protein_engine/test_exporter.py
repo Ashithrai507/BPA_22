@@ -45,3 +45,20 @@ def test_write_produces_contract(tmp_path) -> None:
     assert "sequence" in payload["selected_proteins"][0]
     fasta = (out / "sequences.fasta").read_text()
     assert fasta.startswith(">P37476|spo0A|Spo0A|Bacillus subtilis subsp. subtilis\n")
+
+
+def test_write_uses_utf8_encoding(tmp_path) -> None:
+    proteins = [_protein()]
+    out = write(
+        "Staphylococcus aureus",
+        "Staphylococcus aureus subsp. aureus Rosenbach",
+        1280,
+        proteins,
+        [],
+        tmp_path,
+        source="uniprot",
+    )
+    raw = (out / "proteins.json").read_bytes()
+    assert b"Rosenbach" in raw
+    text = raw.decode("utf-8")
+    assert "Rosenbach" in text

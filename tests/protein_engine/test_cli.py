@@ -32,3 +32,11 @@ def test_cli_missing_species_and_image_exits_two() -> None:
 def test_cli_top_n_zero_rejected() -> None:
     result = _run("--species", "Bacillus subtilis", "--top-n", "0")
     assert result.returncode == 2
+
+
+def test_cli_image_missing_model_exits_two(tmp_path) -> None:
+    fake_image = tmp_path / "dummy.png"
+    fake_image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    result = _run("--image", str(fake_image))
+    assert result.returncode == 2
+    assert "model artifact not found" in result.stderr
