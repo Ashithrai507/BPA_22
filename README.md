@@ -9,7 +9,6 @@ taxonomy group, species, gram stain**, and **colony morphology** — via a hiera
 Input image ──► global features ──► organism_type ──► taxonomy_group ──► species ──► gram
                                  └──────────► colony segmentation ──► shape ──► aggregation ──► JSON
 ```
-
 ---
 
 ## Features
