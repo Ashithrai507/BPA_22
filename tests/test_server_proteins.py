@@ -49,9 +49,7 @@ FAKE_PROTEIN_RESULT = {
 
 @patch("protein_engine.pipeline.run", return_value=FAKE_PROTEIN_RESULT)
 def test_rank_proteins(mock_run) -> None:
-    resp = client.post(
-        "/api/proteins", json={"species": "Bacillus subtilis", "top_n": 10}
-    )
+    resp = client.post("/api/proteins", json={"species": "Bacillus subtilis", "top_n": 10})
     assert resp.status_code == 200
     body = resp.json()
     assert body["species"] == "Bacillus subtilis"

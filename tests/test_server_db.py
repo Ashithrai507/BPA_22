@@ -16,10 +16,17 @@ def test_insert_and_get(tmp_path: Path) -> None:
     db = tmp_path / "test.db"
     init_db(db)
     row_id = insert_prediction(
-        db, filename="test.png", image_bytes=b"\x89PNG", mode="advanced",
-        organism_type="bacteria", predicted_species="Bacillus subtilis",
-        gram="gram_positive", total_colonies=5, dominant_shape="bacilli",
-        confidence=0.92, result_json={"predicted_bacteria_name": "Bacillus subtilis"},
+        db,
+        filename="test.png",
+        image_bytes=b"\x89PNG",
+        mode="advanced",
+        organism_type="bacteria",
+        predicted_species="Bacillus subtilis",
+        gram="gram_positive",
+        total_colonies=5,
+        dominant_shape="bacilli",
+        confidence=0.92,
+        result_json={"predicted_bacteria_name": "Bacillus subtilis"},
     )
     assert row_id == 1
     row = get_prediction(db, row_id)
@@ -34,10 +41,17 @@ def test_list_predictions_pagination(tmp_path: Path) -> None:
     init_db(db)
     for i in range(5):
         insert_prediction(
-            db, filename=f"img_{i}.png", image_bytes=None, mode="basic",
-            organism_type="bacteria", predicted_species="E. coli",
-            gram="gram_negative", total_colonies=3, dominant_shape="bacilli",
-            confidence=0.85, result_json={"i": i},
+            db,
+            filename=f"img_{i}.png",
+            image_bytes=None,
+            mode="basic",
+            organism_type="bacteria",
+            predicted_species="E. coli",
+            gram="gram_negative",
+            total_colonies=3,
+            dominant_shape="bacilli",
+            confidence=0.85,
+            result_json={"i": i},
         )
     page = list_predictions(db, limit=2, offset=0)
     assert page["total"] == 5

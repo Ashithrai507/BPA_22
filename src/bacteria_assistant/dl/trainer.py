@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torchvision.transforms as transforms
@@ -14,27 +14,31 @@ from .losses import CombinedLoss
 
 
 def get_augmentation_transforms():
-    return transforms.Compose([
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomVerticalFlip(p=0.5),
-        transforms.RandomRotation(20),
-        transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
-        transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.RandomErasing(p=0.2, scale=(0.02, 0.1)),
-    ])
+    return transforms.Compose(
+        [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomRotation(20),
+            transforms.RandomResizedCrop(224, scale=(0.7, 1.0)),
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3),
+            transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.RandomErasing(p=0.2, scale=(0.02, 0.1)),
+        ]
+    )
 
 
 def get_tta_transforms():
-    return transforms.Compose([
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation(10),
-        transforms.ColorJitter(brightness=0.1, contrast=0.1),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    return transforms.Compose(
+        [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomRotation(10),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
 
 
 def predict_with_tta(model, image_tensor, n_augmentations=5):
@@ -127,7 +131,7 @@ def fit_embedding_model(
     dataset: ImageDataset,
     config: TrainingConfig,
     checkpoint_path: Path,
-    device: Optional[str] = None,
+    device: str | None = None,
 ) -> tuple[dict[str, list[float]], dict[str, Any]]:
     """Train the embedding model and save a checkpoint.
 
@@ -257,8 +261,8 @@ def train_kfold(
     model: torch.nn.Module,
     config: TrainingConfig,
     n_folds: int = 5,
-    checkpoint_dir: Optional[Path] = None,
-    device: Optional[str] = None,
+    checkpoint_dir: Path | None = None,
+    device: str | None = None,
 ) -> list[dict[str, Any]]:
     """Train with stratified k-fold cross-validation.
 
@@ -283,9 +287,7 @@ def train_kfold(
         from .transforms import inference_transform, train_transform
 
         if config.augment:
-            train_subset = train_subset.with_transform(
-                train_transform(seed=config.seed, input_size=config.input_size)
-            )
+            train_subset = train_subset.with_transform(train_transform(seed=config.seed, input_size=config.input_size))
         else:
             train_subset = train_subset.with_transform(inference_transform(config.input_size))
         val_subset = val_subset.with_transform(inference_transform(config.input_size))
@@ -356,12 +358,14 @@ def train_kfold(
                 torch.save(fold_model.state_dict(), ckpt_path)
 
         train_acc = _evaluate_species(fold_model, train_loader, device)
-        fold_results.append({
-            "fold": fold,
-            "train_acc": train_acc,
-            "val_acc": history["val_acc_species"][-1],
-            "history": history,
-        })
+        fold_results.append(
+            {
+                "fold": fold,
+                "train_acc": train_acc,
+                "val_acc": history["val_acc_species"][-1],
+                "history": history,
+            }
+        )
 
     return fold_results
 
@@ -371,7 +375,7 @@ def train_with_fine_tuning(
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
     config: TrainingConfig,
-    device: Optional[str] = None,
+    device: str | None = None,
     unfreeze_after_epoch: int = 5,
 ) -> tuple[torch.nn.Module, dict[str, list[float]]]:
     """Fine-tune with discriminative learning rates.
@@ -389,10 +393,13 @@ def train_with_fine_tuning(
     head_params = [p for n, p in model.named_parameters() if "backbone" not in n]
 
     backbone_lr = config.lr * 0.01
-    optimizer = torch.optim.AdamW([
-        {"params": backbone_params, "lr": backbone_lr},
-        {"params": head_params, "lr": config.lr},
-    ], weight_decay=config.weight_decay)
+    optimizer = torch.optim.AdamW(
+        [
+            {"params": backbone_params, "lr": backbone_lr},
+            {"params": head_params, "lr": config.lr},
+        ],
+        weight_decay=config.weight_decay,
+    )
 
     criterion = CombinedLoss(
         aux_weight=config.aux_weight,
@@ -400,9 +407,7 @@ def train_with_fine_tuning(
         temperature=config.temperature,
     )
     scheduler = (
-        torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
-        if config.use_scheduler
-        else None
+        torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs) if config.use_scheduler else None
     )
 
     history: dict[str, list[float]] = {"loss": [], "val_acc_species": []}

@@ -33,8 +33,18 @@ def test_extract_color_features_returns_expected_keys(tmp_path: Path) -> None:
     result = extract_color_features(img_path)
 
     expected_keys = {
-        "b_mean", "b_std", "g_mean", "g_std", "r_mean", "r_std",
-        "h_mean", "h_std", "s_mean", "s_std", "v_mean", "v_std",
+        "b_mean",
+        "b_std",
+        "g_mean",
+        "g_std",
+        "r_mean",
+        "r_std",
+        "h_mean",
+        "h_std",
+        "s_mean",
+        "s_std",
+        "v_mean",
+        "v_std",
     }
     assert set(result.keys()) == expected_keys
     assert len(result) == 12
@@ -45,7 +55,7 @@ def test_extract_color_features_returns_numeric_values(tmp_path: Path) -> None:
     result = extract_color_features(img_path)
 
     for value in result.values():
-        assert isinstance(value, (float, np.floating))
+        assert isinstance(value, float | np.floating)
 
 
 def test_train_ensemble_returns_voting_classifier() -> None:

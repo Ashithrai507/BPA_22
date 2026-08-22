@@ -59,20 +59,20 @@ def extract_color_features(image_path: Path) -> dict[str, float]:
     img = cv2.imread(str(image_path))
     if img is None:
         return {}
-    
+
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    
+
     features = {}
-    for i, channel in enumerate(['b', 'g', 'r']):
+    for i, channel in enumerate(["b", "g", "r"]):
         hist = cv2.calcHist([img], [i], None, [32], [0, 256])
-        features[f'{channel}_mean'] = np.mean(hist)
-        features[f'{channel}_std'] = np.std(hist)
-    
-    for i, channel in enumerate(['h', 's', 'v']):
+        features[f"{channel}_mean"] = np.mean(hist)
+        features[f"{channel}_std"] = np.std(hist)
+
+    for i, channel in enumerate(["h", "s", "v"]):
         hist = cv2.calcHist([hsv], [i], None, [32], [0, 256])
-        features[f'{channel}_mean'] = np.mean(hist)
-        features[f'{channel}_std'] = np.std(hist)
-    
+        features[f"{channel}_mean"] = np.mean(hist)
+        features[f"{channel}_std"] = np.std(hist)
+
     return features
 
 
@@ -80,13 +80,10 @@ def train_ensemble(X_train: pd.DataFrame, y_train: pd.Series) -> VotingClassifie
     """Train ensemble of top 3 classical models."""
     rf = RandomForestClassifier(n_estimators=200, random_state=42)
     et = ExtraTreesClassifier(n_estimators=200, random_state=42)
-    svm = SVC(kernel='rbf', probability=True, random_state=42)
-    
-    ensemble = VotingClassifier(
-        estimators=[('rf', rf), ('et', et), ('svm', svm)],
-        voting='soft'
-    )
-    
+    svm = SVC(kernel="rbf", probability=True, random_state=42)
+
+    ensemble = VotingClassifier(estimators=[("rf", rf), ("et", et), ("svm", svm)], voting="soft")
+
     ensemble.fit(X_train, y_train)
     return ensemble
 

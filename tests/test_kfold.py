@@ -14,17 +14,24 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from bacteria_assistant.dl.dataset import build_image_dataset
-from bacteria_assistant.dl.trainer import TrainingConfig, train_kfold, train_with_fine_tuning, _model_init_kwargs
 from sklearn.model_selection import StratifiedKFold
+
+from bacteria_assistant.dl.dataset import build_image_dataset
+from bacteria_assistant.dl.trainer import TrainingConfig, _model_init_kwargs, train_kfold, train_with_fine_tuning
 
 
 class TinyBackbone(nn.Module):
     """Minimal backbone for fast smoke tests."""
 
-    def __init__(self, backbone_name: str = "tiny", pretrained: bool = False,
-                 num_species: int = 3, num_groups: int = 2,
-                 num_grams: int = 2, num_types: int = 1) -> None:
+    def __init__(
+        self,
+        backbone_name: str = "tiny",
+        pretrained: bool = False,
+        num_species: int = 3,
+        num_groups: int = 2,
+        num_grams: int = 2,
+        num_types: int = 1,
+    ) -> None:
         super().__init__()
         self.backbone_name = backbone_name
         self.embedding_dim = 16
@@ -67,14 +74,17 @@ def tiny_table(tmp_path: Path) -> pd.DataFrame:
         img_path = tmp_path / f"img_{i}.png"
         np_img = (np.random.default_rng(i).random((64, 64, 3)) * 255).astype(np.uint8)
         import cv2
+
         cv2.imwrite(str(img_path), np_img)
-        rows.append({
-            "image_path": str(img_path),
-            "organism": ["Staphylococcus aureus", "Bacillus subtilis", "Escherichia coli"][i % 3],
-            "organism_type": "bacteria",
-            "gram_label": "gram_positive" if i % 2 else "gram_negative",
-            "taxonomy_group": ["cocci", "bacilli"][i % 2],
-        })
+        rows.append(
+            {
+                "image_path": str(img_path),
+                "organism": ["Staphylococcus aureus", "Bacillus subtilis", "Escherichia coli"][i % 3],
+                "organism_type": "bacteria",
+                "gram_label": "gram_positive" if i % 2 else "gram_negative",
+                "taxonomy_group": ["cocci", "bacilli"][i % 2],
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -99,8 +109,8 @@ def test_kfold_no_leakage(tiny_table: pd.DataFrame) -> None:
     config = TrainingConfig(batch_size=4, epochs=1, lr=1e-3, num_workers=0, seed=0)
     n_folds = 3
 
-    # Run k-fold to get results
-    results = train_kfold(dataset, model, config, n_folds=n_folds, device="cpu")
+    # Run k-fold to exercise the full loop
+    train_kfold(dataset, model, config, n_folds=n_folds, device="cpu")
 
     # Verify the splits are actually disjoint using the same StratifiedKFold logic
     species_labels = dataset.table["organism"].tolist()
@@ -118,9 +128,9 @@ def test_kfold_no_leakage(tiny_table: pd.DataFrame) -> None:
     # Different folds must have different validation sets
     for i in range(n_folds):
         for j in range(i + 1, n_folds):
-            assert all_val_indices[i] != all_val_indices[j], (
-                f"Folds {i} and {j} have identical validation sets — likely not stratified properly"
-            )
+            assert (
+                all_val_indices[i] != all_val_indices[j]
+            ), f"Folds {i} and {j} have identical validation sets — likely not stratified properly"
 
 
 def test_fine_tuning_returns_model(tiny_table: pd.DataFrame) -> None:
@@ -129,16 +139,11 @@ def test_fine_tuning_returns_model(tiny_table: pd.DataFrame) -> None:
     config = TrainingConfig(batch_size=4, epochs=2, lr=1e-3, num_workers=0, seed=0)
 
     from bacteria_assistant.dl.trainer import _collate
-    train_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=4, shuffle=True, collate_fn=_collate
-    )
-    val_loader = torch.utils.data.DataLoader(
-        dataset, batch_size=4, shuffle=False, collate_fn=_collate
-    )
 
-    trained_model, history = train_with_fine_tuning(
-        model, train_loader, val_loader, config, device="cpu"
-    )
+    train_loader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=_collate)
+    val_loader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=False, collate_fn=_collate)
+
+    trained_model, history = train_with_fine_tuning(model, train_loader, val_loader, config, device="cpu")
     assert isinstance(trained_model, nn.Module)
     assert len(history["loss"]) == 2
     assert len(history["val_acc_species"]) == 2
