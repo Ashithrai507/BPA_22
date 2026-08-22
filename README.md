@@ -1,14 +1,21 @@
 # BPA-22 — Bacteria Lab Assistant Predictor
 
-A classical machine-learning pipeline that analyzes microscopy images of bacterial and
+A machine-learning pipeline that analyzes microscopy images of bacterial and
 fungal cultures and produces structured lab-grade predictions: **organism type,
 taxonomy group, species, gram stain**, and **colony morphology** — via a hierarchical
-`scikit-learn` classifier stack with a desktop GUI.
+`scikit-learn` classifier stack (optionally powered by deep-learning embeddings).
+
+Ships with a desktop GUI, a **web app** (FastAPI REST backend + React SPA with a
+SQLite prediction history), and a **protein ranking engine** that retrieves and
+scores folding-ready proteins for the predicted species.
 
 ```
-Input image ──► global features ──► organism_type ──► taxonomy_group ──► species ──► gram
+Input image ──► image features ──► organism_type ──► taxonomy_group ──► species ──► gram
                                  └──────────► colony segmentation ──► shape ──► aggregation ──► JSON
 ```
+
+Image features come either from hand-engineered CV descriptors (default) or from an
+**optional deep-learning embedding model** that replaces them with learned features.
 
 ---
 
@@ -16,6 +23,9 @@ Input image ──► global features ──► organism_type ──► taxonomy
 
 - **Hierarchical ML inference** — each classifier narrows the decision space, reducing
   biologically invalid predictions.
+- **Optional DL embeddings** — a pretrained `efficientnet_b0` multi-task encoder
+  (ResNet / MobileNet backbones also available) can replace the hand-engineered image
+  features; species inference then runs with test-time augmentation, group-constrained.
 - **Organism classification** — `bacteria` vs `fungi` across **10 supported species**.
 - **Gram classification** — `gram_positive` / `gram_negative` (bacteria only; fungi
   mapped to `non_bacterial_fungi`).
@@ -30,6 +40,13 @@ Input image ──► global features ──► organism_type ──► taxonomy
   `unknown` instead of returning a false positive.
 - **Desktop GUI** — retro Win95-styled PyQt5 application with live image preview and
   raw JSON inspection.
+- **Web app** — FastAPI REST backend + React (Vite + Tailwind) SPA: drag-and-drop image
+  analysis, per-colony results table, persistent prediction history with delete
+  (`data/bpa.db`), and interactive protein ranking.
+- **Protein ranking engine** — for a predicted (or named) species: resolves the NCBI
+  taxonomy ID, retrieves candidate proteins from UniProt/PDB, scores them
+  (essentiality / virulence / resistance), and exports FASTA. Supports batch mode and
+  offline reuse of the retrieval cache.
 
 ---
 
@@ -53,7 +70,7 @@ python -m pip install -r requirements.txt
 ```
 
 Core dependencies: `numpy`, `pandas`, `scikit-learn`, `opencv-python-headless`,
-`joblib`, `PyQt5`, `pytest`.
+`joblib`, `torch`, `torchvision`, `requests`, `PyQt5`, `pytest`.
 
 ---
 
@@ -67,12 +84,21 @@ make train
 python scripts/train_model.py
 ```
 
+Optional deep-learning track — train an embedding model first, then retrain the
+classical hierarchy on top of the learned embeddings:
+
+```bash
+python scripts/train_dl.py                       # writes artifacts/embedding_model.pt
+python scripts/train_model.py --dl artifacts/embedding_model.pt
+```
+
 Artifacts written to:
 
 - `artifacts/bacteria_models.joblib` — serialized model bundle
 - `artifacts/bacteria_models.metrics.json` — per-model evaluation metrics, including
   `per_modality_metrics` (gram-stain vs media-plate held-out accuracy) and
   `training_meta.feature_version`
+- `artifacts/embedding_model.pt` — DL embedding checkpoint (only when the DL track is used)
 
 > The bundled artifact was produced in a different workspace. Retrain locally to
 > refresh feature paths and metrics.
@@ -101,7 +127,63 @@ python scripts/bacteria_ui.py
 - Click **Analyze** to run prediction
 - Toggle **Show Details** to view the full JSON payload
 
-### 4. Run the test suite
+### 4. Evaluate model quality
+
+```bash
+make evaluate
+# or
+python scripts/evaluate_models.py
+```
+
+Prints a precision / recall / F1 report per model from the trained artifact's metrics
+JSON. To measure end-to-end DL-assisted inference accuracy on the shared 80/20 holdout:
+
+```bash
+python scripts/evaluate_dl_holdout.py
+```
+
+### 5. Rank proteins for a species (CLI)
+
+```bash
+# From a petri-dish image (predicts the species, then ranks its proteins)
+python scripts/run_protein_pipeline.py --image path/to/plate.png --top-n 10
+
+# Or directly from a species name
+python scripts/run_protein_pipeline.py --species "Bacillus subtilis" --top-n 10
+
+# Reuse the retrieval cache only (no network calls)
+python scripts/run_protein_pipeline.py --species "Escherichia coli" --offline
+```
+
+Writes ranked proteins with scores plus FASTA/JSON exports to `output/` by default.
+
+### 6. Run the web app
+
+Requires **Node 18+** for the frontend and `fastapi`/`uvicorn` for the backend.
+
+```bash
+# 1. Backend — FastAPI on http://localhost:8000
+python -m pip install -r server/requirements.txt
+uvicorn server.main:app --port 8000
+
+# 2. Frontend — Vite dev server on http://localhost:5173 (proxies /api to :8000)
+cd frontend && npm install && npm run dev
+```
+
+Open <http://localhost:5173>:
+
+- **Image Analysis** — drag & drop a plate image, inspect the per-colony results table
+  and raw JSON; every run is stored in the history (`data/bpa.db`, created at runtime).
+- **Protein Ranking** — pick one of the 10 supported species (or paste several for
+  batch mode), rank folding-ready candidates, download FASTA.
+- **History** — browse past predictions across pages, see protein-analysis status,
+  open or delete entries.
+
+REST endpoints: `POST /api/predict`, `GET /api/predict/history`,
+`GET|DELETE /api/predict/{id}`, `GET /api/species`,
+`GET /api/proteins/history`, `POST /api/proteins`, `POST /api/proteins/batch`.
+
+### 7. Run the test suite
 
 ```bash
 python -m pytest -q
@@ -119,6 +201,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full contributor workflow.
 ```bash
 make setup        # venv + runtime + dev deps
 make train        # rebuild the model bundle (needs data/dataset present)
+make evaluate     # print the per-model quality report from the metrics JSON
 make test         # run tests
 make lint         # ruff check + format check
 make format       # auto-format with ruff
@@ -206,6 +289,23 @@ gates, all label fields are returned as `unknown` (colony counts are still repor
 - **Colony features (7-dim)** — per segmented colony: area, perimeter, circularity
   (`4πA/P²`), aspect ratio, solidity, equivalent diameter, mean intensity.
 
+### Deep-learning embedding track (optional)
+
+Instead of the hand-engineered global features, a pretrained CNN encoder can produce
+the image representation:
+
+- **Backbone** — `efficientnet_b0` by default (1280-d pooled embedding); `resnet18`,
+  `resnet50`, and `mobilenet_v3_large` are also supported.
+- **Multi-task heads** — species / group / gram / organism-type heads regularize
+  training and supply the species probabilities at inference; downstream sklearn
+  classifiers consume the pooled embedding.
+- **Training** — backbone frozen for the first epochs, then fine-tuned end-to-end
+  with auxiliary + contrastive losses (`scripts/train_dl.py`).
+- **Inference** — when the artifact references an embedding checkpoint, `load_models()`
+  attaches it automatically; species prediction uses test-time augmentation restricted
+  to the predicted taxonomy group. The image-quality rejection gate still runs on the
+  classical edge/sharpness statistics.
+
 ### Hierarchical model stack
 
 | Model              | Task                                                        |
@@ -222,7 +322,8 @@ Every classifier is auto-selected between **RandomForest**, **ExtraTrees**, and
 
 ### Inference flow
 
-1. Extract global features from the image.
+1. Extract image features (classical descriptors, or a DL embedding when the
+   artifact was trained with `--dl`).
 2. Predict organism type → taxonomy group → group-constrained species.
 3. Predict gram label; apply **metadata consistency overrides** so the output can never
    contradict the species' known biology.
@@ -238,7 +339,10 @@ Every classifier is auto-selected between **RandomForest**, **ExtraTrees**, and
 BPA_22/
 ├── scripts/                       # CLI entry points
 │   ├── bacteria_ui.py             # PyQt5 desktop UI
-│   ├── train_model.py             # train + save artifacts
+│   ├── train_model.py             # train + save artifacts (--dl for embedding retrain)
+│   ├── train_dl.py                # train the DL embedding model
+│   ├── evaluate_models.py         # per-model quality report from metrics JSON
+│   ├── evaluate_dl_holdout.py     # DL-assisted inference accuracy on the holdout
 │   ├── predict_bacteria.py        # predict on a single image
 │   └── run_protein_pipeline.py    # Phase 2: species -> protein sequence
 ├── src/
@@ -246,17 +350,38 @@ BPA_22/
 │   │   ├── config.py              # taxonomy, thresholds, paths, feature version
 │   │   ├── features.py            # image + colony feature extraction, CLAHE, augmentation
 │   │   ├── training.py            # hierarchical training pipeline
-│   │   └── inference.py           # prediction + output assembly
+│   │   ├── inference.py           # prediction + output assembly
+│   │   └── dl/                    # optional DL embedding track (torch)
+│   │       ├── model.py           # pretrained backbone + multi-task heads
+│   │       ├── dataset.py         # image dataset + label encoders
+│   │       ├── transforms.py      # train/eval augmentations
+│   │       ├── losses.py          # auxiliary + contrastive losses
+│   │       ├── trainer.py         # fit_embedding_model, device helpers
+│   │       └── extract.py         # checkpoint loading, embeddings, TTA species probs
 │   └── protein_engine/            # Phase 2: protein retrieval engine
 │       ├── taxonomy/              # species name + NCBI taxonomy ID
 │       ├── retrieval/             # UniProt / NCBI / PDB clients + cache
 │       ├── ranking/               # essential / virulence / resistance scoring
 │       ├── sequence/              # validation + FASTA/JSON export
 │       └── documentation/         # design & architecture specs
+├── server/                        # Phase 3: FastAPI REST backend for the web app
+│   ├── main.py                    # app assembly, CORS, routers
+│   ├── db.py                      # SQLite audit log (predictions + protein analyses)
+│   ├── models.py                  # Pydantic request/response schemas
+│   ├── dependencies.py            # cached model loading + DB path
+│   └── routers/
+│       ├── predict.py             # POST /api/predict, history/detail/delete
+│       └── proteins.py            # species list, protein ranking (+ batch/history)
+├── frontend/                      # React 19 + Vite + Tailwind SPA
+│   └── src/
+│       ├── pages/                 # PredictPage, ProteinPage, HistoryPage
+│       ├── components/            # upload, result tables, FASTA export
+│       └── api.js                 # axios client (baseURL /api)
 ├── morphology/                    # standalone prototype pipeline (research)
-├── tests/
+├── tests/                         # contract tests + classical/DL unit suites
 │   ├── test_output_contract.py    # JSON output contract tests
-│   └── test_modality_fix.py       # modality-confounder unit tests
+│   ├── test_modality_fix.py       # modality-confounder unit tests
+│   └── test_dl_*.py, ...          # DL dataset/model/training/inference suites
 ├── data/                          # dataset + test images (not in git)
 ├── reference_data/                # curated ranking DBs (not in git)
 ├── output/                        # pipeline runtime outputs (not in git)
@@ -278,17 +403,29 @@ BPA_22/
 
 ## Documentation
 
-- [`documentation/classical_ml_workflow(consider).md`](<documentation/classical_ml_workflow(consider).md>) —
-  complete end-to-end walkthrough of the ML pipeline.
-- [`documentation/pipeline_architecture.md`](documentation/pipeline_architecture.md) —
-  detailed system architecture.
-- [`documentation/follow.md`](documentation/follow.md) — feature/spec notes.
+- [`documentation/model_metrics.md`](documentation/model_metrics.md) — full holdout
+  metrics for the DL hybrid vs classical baseline (accuracy, per-class reports, insights).
+- [`documentation/bacteria_assistant_modules.md`](documentation/bacteria_assistant_modules.md) —
+  function-by-function reference for every `bacteria_assistant/` module (classical + DL).
+- [`documentation/image_processing_pipeline.md`](documentation/image_processing_pipeline.md) —
+  step-by-step walkthrough of what happens between input image and JSON output.
+- [`documentation/developer.md`](documentation/developer.md) — end-to-end developer
+  guide: building the system from scratch.
+- [`documentation/project_steps.md`](documentation/project_steps.md) — build &
+  iteration log (training, contracts, accuracy work).
+- [`documentation/questions.md`](documentation/questions.md) — architecture concept Q&A.
 - [`src/protein_engine/documentation/design.md`](src/protein_engine/documentation/design.md) —
   Phase 2 protein engine system design.
 - [`src/protein_engine/documentation/architecture.md`](src/protein_engine/documentation/architecture.md) —
   Phase 2 protein engine technical architecture.
+- [`docs/system_design_architecture.md`](docs/system_design_architecture.md) and
+  [`docs/step_log.md`](docs/step_log.md) — deep-learning redesign design draft and step log.
+- [`docs/superpowers/specs/2026-08-13-dl-integration-design.md`](docs/superpowers/specs/2026-08-13-dl-integration-design.md) —
+  DL embedding integration spec (merged).
 - [`docs/superpowers/specs/2026-08-06-protein-engine-design.md`](docs/superpowers/specs/2026-08-06-protein-engine-design.md) —
-  Phase 2 protein engine design spec (pending review).
+  Phase 2 protein engine design spec (merged).
+- [`docs/superpowers/specs/2026-08-17-web-frontend-design.md`](docs/superpowers/specs/2026-08-17-web-frontend-design.md) —
+  web frontend + FastAPI backend design spec.
 
 ---
 
@@ -305,7 +442,6 @@ BPA_22/
 
 ## Future Improvements
 
-- CNN / transfer-learning feature extractor for stronger discrimination.
 - Larger, balanced dataset with explicit spiral samples.
 - Confidence-threshold calibration and an explicit `uncertain` tier.
 - Model monitoring / drift dashboard.
