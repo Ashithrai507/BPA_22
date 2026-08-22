@@ -3,8 +3,11 @@
 A machine-learning pipeline that analyzes microscopy images of bacterial and
 fungal cultures and produces structured lab-grade predictions: **organism type,
 taxonomy group, species, gram stain**, and **colony morphology** — via a hierarchical
-`scikit-learn` classifier stack (optionally powered by deep-learning embeddings)
-with a desktop GUI.
+`scikit-learn` classifier stack (optionally powered by deep-learning embeddings).
+
+Ships with a desktop GUI, a **web app** (FastAPI REST backend + React SPA with a
+SQLite prediction history), and a **protein ranking engine** that retrieves and
+scores folding-ready proteins for the predicted species.
 
 ```
 Input image ──► image features ──► organism_type ──► taxonomy_group ──► species ──► gram
@@ -37,6 +40,13 @@ Image features come either from hand-engineered CV descriptors (default) or from
   `unknown` instead of returning a false positive.
 - **Desktop GUI** — retro Win95-styled PyQt5 application with live image preview and
   raw JSON inspection.
+- **Web app** — FastAPI REST backend + React (Vite + Tailwind) SPA: drag-and-drop image
+  analysis, per-colony results table, persistent prediction history with delete
+  (`data/bpa.db`), and interactive protein ranking.
+- **Protein ranking engine** — for a predicted (or named) species: resolves the NCBI
+  taxonomy ID, retrieves candidate proteins from UniProt/PDB, scores them
+  (essentiality / virulence / resistance), and exports FASTA. Supports batch mode and
+  offline reuse of the retrieval cache.
 
 ---
 
@@ -132,7 +142,48 @@ JSON. To measure end-to-end DL-assisted inference accuracy on the shared 80/20 h
 python scripts/evaluate_dl_holdout.py
 ```
 
-### 5. Run the test suite
+### 5. Rank proteins for a species (CLI)
+
+```bash
+# From a petri-dish image (predicts the species, then ranks its proteins)
+python scripts/run_protein_pipeline.py --image path/to/plate.png --top-n 10
+
+# Or directly from a species name
+python scripts/run_protein_pipeline.py --species "Bacillus subtilis" --top-n 10
+
+# Reuse the retrieval cache only (no network calls)
+python scripts/run_protein_pipeline.py --species "Escherichia coli" --offline
+```
+
+Writes ranked proteins with scores plus FASTA/JSON exports to `output/` by default.
+
+### 6. Run the web app
+
+Requires **Node 18+** for the frontend and `fastapi`/`uvicorn` for the backend.
+
+```bash
+# 1. Backend — FastAPI on http://localhost:8000
+python -m pip install -r server/requirements.txt
+uvicorn server.main:app --port 8000
+
+# 2. Frontend — Vite dev server on http://localhost:5173 (proxies /api to :8000)
+cd frontend && npm install && npm run dev
+```
+
+Open <http://localhost:5173>:
+
+- **Image Analysis** — drag & drop a plate image, inspect the per-colony results table
+  and raw JSON; every run is stored in the history (`data/bpa.db`, created at runtime).
+- **Protein Ranking** — pick one of the 10 supported species (or paste several for
+  batch mode), rank folding-ready candidates, download FASTA.
+- **History** — browse past predictions across pages, see protein-analysis status,
+  open or delete entries.
+
+REST endpoints: `POST /api/predict`, `GET /api/predict/history`,
+`GET|DELETE /api/predict/{id}`, `GET /api/species`,
+`GET /api/proteins/history`, `POST /api/proteins`, `POST /api/proteins/batch`.
+
+### 7. Run the test suite
 
 ```bash
 python -m pytest -q
@@ -313,6 +364,19 @@ BPA_22/
 │       ├── ranking/               # essential / virulence / resistance scoring
 │       ├── sequence/              # validation + FASTA/JSON export
 │       └── documentation/         # design & architecture specs
+├── server/                        # Phase 3: FastAPI REST backend for the web app
+│   ├── main.py                    # app assembly, CORS, routers
+│   ├── db.py                      # SQLite audit log (predictions + protein analyses)
+│   ├── models.py                  # Pydantic request/response schemas
+│   ├── dependencies.py            # cached model loading + DB path
+│   └── routers/
+│       ├── predict.py             # POST /api/predict, history/detail/delete
+│       └── proteins.py            # species list, protein ranking (+ batch/history)
+├── frontend/                      # React 19 + Vite + Tailwind SPA
+│   └── src/
+│       ├── pages/                 # PredictPage, ProteinPage, HistoryPage
+│       ├── components/            # upload, result tables, FASTA export
+│       └── api.js                 # axios client (baseURL /api)
 ├── morphology/                    # standalone prototype pipeline (research)
 ├── tests/                         # contract tests + classical/DL unit suites
 │   ├── test_output_contract.py    # JSON output contract tests
@@ -339,6 +403,8 @@ BPA_22/
 
 ## Documentation
 
+- [`documentation/model_metrics.md`](documentation/model_metrics.md) — full holdout
+  metrics for the DL hybrid vs classical baseline (accuracy, per-class reports, insights).
 - [`documentation/bacteria_assistant_modules.md`](documentation/bacteria_assistant_modules.md) —
   function-by-function reference for every `bacteria_assistant/` module (classical + DL).
 - [`documentation/image_processing_pipeline.md`](documentation/image_processing_pipeline.md) —
@@ -358,6 +424,8 @@ BPA_22/
   DL embedding integration spec (merged).
 - [`docs/superpowers/specs/2026-08-06-protein-engine-design.md`](docs/superpowers/specs/2026-08-06-protein-engine-design.md) —
   Phase 2 protein engine design spec (merged).
+- [`docs/superpowers/specs/2026-08-17-web-frontend-design.md`](docs/superpowers/specs/2026-08-17-web-frontend-design.md) —
+  web frontend + FastAPI backend design spec.
 
 ---
 
