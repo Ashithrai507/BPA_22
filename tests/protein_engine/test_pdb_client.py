@@ -29,6 +29,21 @@ def test_has_structure_404_caches_negative_marker(tmp_path) -> None:
     assert has_structure("P0A1B2", cache) is False
 
 
+def test_has_structure_empty_list_returns_false(tmp_path) -> None:
+    transport = FakeTransport([json_response([])])
+    cache = ApiCache(tmp_path / "http.db", transport=transport, rate_limit=0.0, backoff=[])
+    assert has_structure("P0A1B2", cache) is False
+
+
+def test_has_structure_non_json_body_raises(tmp_path) -> None:
+    import json as _json
+
+    transport = FakeTransport([FakeResponse("not json at all")])
+    cache = ApiCache(tmp_path / "http.db", transport=transport, rate_limit=0.0, backoff=[])
+    with pytest.raises((_json.JSONDecodeError, ValueError)):
+        has_structure("P0A1B2", cache)
+
+
 def test_has_structure_propagates_other_errors(tmp_path) -> None:
     transport = FakeTransport([FakeResponse("", status_code=500), FakeResponse("", status_code=500)])
     cache = ApiCache(tmp_path / "http.db", transport=transport, rate_limit=0.0, backoff=[0.0])
